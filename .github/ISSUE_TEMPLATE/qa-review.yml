@@ -69,8 +69,8 @@ body:
       label: 🔄 Sincronización con GitHub
       options:
         - label: "Webhook real: push a un repo actualiza el estado del proyecto en menos de 1 min sin recargar"
-        - label: "Sincronizar todo" desde /config corre y reporta resumen correcto (procesados / failed)
-        - label: "Sincronizar este repo" en /proyectos/[name] funciona y refresca la vista
+        - label: 'El botón "Sincronizar todo" desde /config corre y reporta resumen correcto (procesados / failed)'
+        - label: 'El botón "Sincronizar este repo" en /proyectos/[name] funciona y refresca la vista'
         - label: Repo recién creado (solo README en main) NO aparece como "en producción"
         - label: Repo con main+QA del mismo commit aparece en estado "qa" (no en producción)
         - label: Repo con main que tiene commits propios sobre QA + sin issues qa/cs abiertos → "producción"
