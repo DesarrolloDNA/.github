@@ -1,0 +1,194 @@
+name: 🧪 QA Review — DNA Hub (solo aplica al repo dna-hub)
+description: "Revisión de QA del panel DNA Hub. Los criterios son específicos del panel — NO usar en otros repos de la org."
+title: "[QA][dna-hub] <feature/sprint que estás probando>"
+labels:
+  - qa
+body:
+  # ─── 1. Contexto de la prueba ──────────────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## 📋 Contexto de esta sesión de QA
+        Llena estos campos antes de empezar. Si algo no aplica, escribe N/A.
+
+  - type: input
+    id: branch
+    attributes:
+      label: Rama probada
+      description: ¿Sobre qué rama corres el QA?
+      placeholder: "QA"
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit SHA (primeros 7 chars)
+      description: Para poder reproducir exactamente lo que probaste
+      placeholder: "a1b2c3d"
+    validations:
+      required: true
+
+  - type: input
+    id: env-url
+    attributes:
+      label: URL del entorno de pruebas
+      placeholder: "https://qa.dnaevoluciona.com"
+    validations:
+      required: false
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser + versión
+      placeholder: "Chrome 142, Firefox 130, Safari 18"
+    validations:
+      required: false
+
+  # ─── 2. Acceptance criteria críticos ────────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## ✅ Acceptance criteria — features que SI rompen, rompen el negocio
+
+  - type: checkboxes
+    id: ac-auth
+    attributes:
+      label: 🔐 Autenticación y sesión
+      options:
+        - label: Login con credenciales válidas funciona y redirige al dashboard
+        - label: Login con credenciales inválidas devuelve error claro (no leak de info)
+        - label: Logout cierra la sesión y redirige a /login
+        - label: Después de logout el token JWT ya no es aceptado (no se puede pegar de vuelta)
+        - label: Sesión expirada redirige a /login automáticamente
+        - label: Rate limit en /api/auth/login bloquea después de 8 intentos en 5 min
+
+  - type: checkboxes
+    id: ac-sync
+    attributes:
+      label: 🔄 Sincronización con GitHub
+      options:
+        - label: "Webhook real: push a un repo actualiza el estado del proyecto en menos de 1 min sin recargar"
+        - label: "Sincronizar todo" desde /config corre y reporta resumen correcto (procesados / failed)
+        - label: "Sincronizar este repo" en /proyectos/[name] funciona y refresca la vista
+        - label: Repo recién creado (solo README en main) NO aparece como "en producción"
+        - label: Repo con main+QA del mismo commit aparece en estado "qa" (no en producción)
+        - label: Repo con main que tiene commits propios sobre QA + sin issues qa/cs abiertos → "producción"
+        - label: Repo con solo main (sin dev/QA) aparece como "legacy" y se excluye del informe
+
+  - type: checkboxes
+    id: ac-assignments
+    attributes:
+      label: 👥 Detección de colaboradores
+      options:
+        - label: Dev que solo commitea (no abre issues QA) aparece SOLO con badge "Desarrollador"
+        - label: Dev que solo abre issues QA aparece SOLO con badge "QA"
+        - label: Dev que abre issues CS aparece SOLO con badge "CS"
+        - label: Dev que hace AMBAS cosas (commits + abre QA) aparece con AMBOS badges en el detalle
+        - label: Dev que cierra/resuelve un issue de QA (assignee) NO aparece como QA reviewer
+        - label: Dev que commitea solo a su rama dev/<persona> SÍ se detecta como developer
+        - label: Login de GitHub sin mapeo en /equipo aparece en "unmappedLogins" del sync
+        - label: En "Equipo detectado" del proyecto cada empleado aparece UNA sola vez (con sus roles agrupados)
+
+  - type: checkboxes
+    id: ac-deadlines
+    attributes:
+      label: 📅 Deadlines y fechas
+      options:
+        - label: Deadline configurado en /proyectos/[name] se guarda y muestra la fecha CORRECTA (sin offset de zona horaria)
+        - label: Proyecto en dev/QA sin deadline aparece en "MissingDeadlinesPanel" del dashboard
+        - label: Proyecto con deadline vencido se marca como "retrasado" en el detalle (badge rojo + días)
+        - label: Proyecto con deadline en próximos 30 días aparece en "Próximas entregas" del informe
+        - label: Proyecto en estado "production" NO aparece como retrasado aunque la fecha haya pasado
+
+  - type: checkboxes
+    id: ac-report
+    attributes:
+      label: 📄 Informe PDF
+      options:
+        - label: Generar PDF "Mes actual" desde /reportes funciona y descarga el archivo
+        - label: Generar PDF "Mes anterior" filtra correctamente proyectos por actividad en ese mes
+        - label: Logros del periodo solo incluye repos cuyo flowState es realmente production o qa
+        - label: Auditoría QA muestra una fila por proyecto con # issues abiertos, % resuelto y barra de progreso
+        - label: Auditoría Cybersecurity tiene la misma estructura que QA
+        - label: Carga por colaborador suma correcto en Como Dev / Como QA / Como Cybersec, total = repos únicos
+        - label: Indicadores generales muestran delta vs snapshot anterior cuando existe
+        - label: Repos legacy / inactive / empty NO aparecen en ninguna sección del informe
+        - label: PDF NO incluye la palabra "Cybersec" en el label de la fase merge (solo dice "Merge / Cybersec" se reemplazó por "Merge")
+
+  - type: checkboxes
+    id: ac-activity
+    attributes:
+      label: 📡 Feed de actividad
+      options:
+        - label: Activity feed del dashboard muestra commits de TODAS las ramas (dev, dev/<persona>, merge, QA, main)
+        - label: Cada commit muestra el badge de su rama de origen con el color correcto
+        - label: Commits de los últimos 7 días se ven en orden cronológico descendente
+        - label: AutoRefresh actualiza el feed cada ~20s sin recargar la página
+        - label: Si la pestaña está oculta, el AutoRefresh pausa (no quema API calls)
+
+  - type: checkboxes
+    id: ac-security
+    attributes:
+      label: 🛡️ Seguridad
+      options:
+        - label: Rutas protegidas redirigen a /login si no hay token
+        - label: Errores 500 NO devuelven stack traces ni paths internos
+        - label: POST con Origin/Referer de otro dominio devuelve 403
+        - label: Header Content-Security-Policy presente en las páginas
+        - label: Cookie de sesión tiene flags HttpOnly + Secure + SameSite=Lax
+
+  - type: checkboxes
+    id: ac-perf
+    attributes:
+      label: ⚡ Performance
+      options:
+        - label: Cold load del dashboard (primera visita post-deploy) carga en menos de 5s
+        - label: Visitas subsiguientes (caché caliente) cargan en menos de 1s
+        - label: Generar PDF no excede 15s en condiciones normales
+        - label: Rate limit no se dispara en uso normal de un usuario (sync manual, refresh, navegación)
+
+  # ─── 3. Resultado global ────────────────────────────────────────────
+  - type: dropdown
+    id: result
+    attributes:
+      label: 🎯 Resultado global del QA
+      options:
+        - "✅ Aprobado para producción"
+        - "⚠️ Aprobado con observaciones menores (anotar abajo)"
+        - "❌ Rechazado — requiere correcciones (anotar abajo)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: findings
+    attributes:
+      label: 🔍 Hallazgos / observaciones
+      description: |
+        Para cada criterio que NO pasó, describe:
+        - Qué probaste
+        - Qué esperabas
+        - Qué pasó realmente
+        - Pasos para reproducir
+        Si encuentras bugs grandes, abre issues SEPARADOS (uno por bug) y referencia desde acá.
+      placeholder: |
+        Ejemplo:
+        - [AC-deadlines] El deadline 2026-08-09 aparece como 2026-08-08 en el dashboard. Reproducible en Chrome 142. Issue separado: #42
+        - [AC-perf] Cold load tarda ~7s — investigar si es por el batch de Odoo
+      render: markdown
+    validations:
+      required: false
+
+  - type: input
+    id: time-spent
+    attributes:
+      label: ⏱️ Tiempo aproximado del QA
+      placeholder: "1h 30min"
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        *Tu rol queda registrado automáticamente — DNA Hub detecta al creador de este issue como QA reviewer del proyecto. No hace falta asignar a nadie.*
