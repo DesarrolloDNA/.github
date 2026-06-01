@@ -1,0 +1,300 @@
+name: 🧪 QA Review — Living Control
+description: "Revisión de QA del sistema Living Control (arrendamientos DNA Studios). Recorre el flujo end-to-end y valida los criterios de aceptación."
+title: "[QA][living-control] <feature/sprint que estás probando>"
+labels:
+  - qa
+body:
+  # ─── 1. Contexto de la prueba ──────────────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## 📋 Contexto de esta sesión de QA
+        Llena estos campos antes de empezar. Si algo no aplica, escribe N/A.
+        Antes de marcar checks, **abre el sistema y reproduce cada flujo en orden** — no copies de un QA anterior.
+
+  - type: input
+    id: branch
+    attributes:
+      label: Rama probada
+      placeholder: "QA"
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit SHA (primeros 7 chars)
+      description: Para poder reproducir exactamente lo que probaste
+      placeholder: "a1b2c3d"
+    validations:
+      required: true
+
+  - type: input
+    id: env-url
+    attributes:
+      label: URL del entorno de pruebas
+      placeholder: "https://testauto2.dnapp.com.mx"
+    validations:
+      required: false
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser + versión
+      placeholder: "Chrome 142, Firefox 130, Safari 18"
+    validations:
+      required: false
+
+  - type: input
+    id: inquilino-prueba
+    attributes:
+      label: Inquilino de pruebas usado
+      description: Nombre o ID del inquilino que se utilizó para los flujos de pago/contrato
+      placeholder: "ADAN ANDRADE MARTINEZ"
+    validations:
+      required: false
+
+  # ─── 2. Autenticación y sesión ──────────────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## ✅ Acceptance criteria — si algo aquí rompe, es bloqueante
+
+  - type: checkboxes
+    id: ac-auth
+    attributes:
+      label: 🔐 Autenticación y sesión
+      options:
+        - label: Login con credenciales válidas redirige al dashboard
+        - label: Login con credenciales inválidas devuelve error claro (no leak de info interna)
+        - label: Logout cierra sesión y redirige a /login
+        - label: Después de logout el access token JWT ya no es aceptado
+        - label: La sesión sobrevive al cerrar/abrir la pestaña (localStorage activo)
+        - label: Tras 1h de inactividad, la siguiente request se renueva sola con el refresh token (transparente al admin)
+        - label: Si el refresh token está expirado/inválido, se redirige a /login sin loops
+
+  # ─── 3. Inquilinos ─────────────────────────────────────────────────
+  - type: checkboxes
+    id: ac-inquilinos
+    attributes:
+      label: 👤 Inquilinos
+      options:
+        - label: Crear inquilino directo (con contrato pendienteFirma) redirige automáticamente a /inquilinos/[id]
+        - label: Crear inquilino solo-lead (sin contrato) funciona y no redirige
+        - label: Buscar partner en Odoo solo devuelve clientes de INMOBILIARIAS (company_id=3) o compartidos (company_id=false)
+        - label: Asociar inquilino a un partner Odoo ya vinculado a otro inquilino → error 409 con mensaje claro (no error Prisma críptico)
+        - label: Editar inquilino actualiza datos sin afectar contratos/pagos
+        - label: Inquilino sin teléfono muestra badge "Sin teléfono"
+        - label: Inquilino sin Odoo muestra badge "Sin Odoo"
+
+  # ─── 4. Apartados ──────────────────────────────────────────────────
+  - type: checkboxes
+    id: ac-apartados
+    attributes:
+      label: 🔑 Apartados
+      options:
+        - label: Apartar studio en el form de creación de inquilino → propiedad pasa a estado "apartado" + cobra $500
+        - label: Botón "Alquilar otro studio" en /inquilinos/[id] (modo apartar) cobra $500 y marca propiedad apartada
+        - label: El botón "Alquilar otro studio" está deshabilitado si el inquilino ya tiene contrato activo o apartado vigente
+        - label: La página individual del inquilino muestra la card "Studios apartados" cuando hay apartado vigente
+        - label: La sesión de pago "apartado" queda vinculada al contrato cuando se convierte (idContrato no nulo)
+        - label: Si el inquilino tuvo apartado en un contrato anterior FINALIZADO, ese pago NO se descuenta en el siguiente contrato
+
+  # ─── 5. Contratos ──────────────────────────────────────────────────
+  - type: checkboxes
+    id: ac-contratos
+    attributes:
+      label: 📑 Contratos
+      options:
+        - label: Convertir apartado → contrato (modo "generar nuevo") crea contrato pendienteFirma + cobra depósito + dispara DNArchive
+        - label: Convertir apartado → contrato (modo "vincular existente") vincula contrato DNArchive ya firmado y NO genera otro
+        - label: Si el contrato DNArchive vinculado está signed/final, el contrato LC se crea como "activo" automáticamente
+        - label: Toggle "Cobrar también primera renta" en convertir-apartado cobra depositoYRenta con descuento del $500 del apartado
+        - label: 'Botón "Alquilar otro studio" modo "Crear contrato directo" SOLO crea contrato pendienteFirma (sin cobrar)'
+        - label: El régimen fiscal (doble/hospedaje) se guarda correctamente al crear contrato
+        - label: Editar contrato recalcula automáticamente el plazo en meses al cambiar fechas inicio/fin
+        - label: Botón "Renovar" SOLO aparece en historial cuando contrato activo + faltan ≤15 días al vencer
+        - label: Dialog de renovación pre-llena datos del contrato anterior y permite cambiar módulo, plazo, renta
+        - label: Renovar contrato finaliza el anterior, crea uno nuevo en "activo" con idContratoAnterior apuntando al previo
+        - label: Si la renovación cambia de módulo, libera el anterior y marca el nuevo como ocupado
+        - label: Finalizar contrato libera la propiedad (estado → disponible)
+        - label: Contratos con fechaFin pasada se finalizan automáticamente con el cron de las 9 AM (incluye rezagados)
+
+  # ─── 6. Tarifas + pagos ────────────────────────────────────────────
+  - type: checkboxes
+    id: ac-pagos
+    attributes:
+      label: 💰 Pagos y tarifas
+      options:
+        - label: Al elegir edificio + plazo en el form de contrato, la renta se autollena con la tarifa correcta (503/215, 218/105, 3/6/12 meses)
+        - label: Si el plazo no es 3/6/12 meses (ej. 4 meses), no autollena — el admin puede teclear manualmente
+        - label: Concepto "Depósito + 1ra renta" prorratea cuando inquilino entra a mitad de mes y descuenta el apartado pagado
+        - label: Concepto "Renta" siempre cobra el monto completo del contrato (sin prorrateo)
+        - label: Concepto "Renovación" siempre cobra el monto completo (sin prorrateo)
+        - label: Cobrar 1ra renta marca el contrato con primerPagoRentaRealizado=true (verificar en BD o por UI siguiente)
+        - label: Tras el primer pago, en "Registrar pago" solo aparecen Renta / Renovación / Otro (ya no Depósito ni Depósito+1ra)
+        - label: En renovaciones, el dialog de "Registrar pago" NO permite cobrar depósito ni depositoYRenta (regla del backend bloquea)
+        - label: Concepto "Apartado" autollena $500
+        - label: La sección "Contrato en DNArchive" del dialog SOLO aparece si el contrato está en pendienteFirma
+        - label: Si el contrato ya está activo (DNArchive ya vinculado), el dialog solo pide datos del pago
+        - label: Pre-vuelo de validación (validar-concepto) rechaza antes de crear contrato si el concepto no aplicará
+        - label: Subir comprobante adjunta el archivo al chatter del account.payment en Odoo
+        - label: Banner "Total a cobrar" en dialog convertir-apartado muestra UN solo total con descuento del apartado
+
+  # ─── 7. Sincronización Odoo ────────────────────────────────────────
+  - type: checkboxes
+    id: ac-odoo
+    attributes:
+      label: 🔄 Sincronización Odoo
+      options:
+        - label: Crear inquilino crea res.partner en Odoo con company_id=INMOBILIARIAS y mobile+phone
+        - label: Registrar pago crea account.payment en Odoo con journal_id correcto y branch_id del edificio
+        - label: El payment_method_line_id se elige automáticamente según el journal (no hardcoded)
+        - label: Si el journal del pago cambia, el method_line se reemplaza correctamente (no falla "El método de pago seleccionado no está disponible")
+        - label: El account.payment queda en estado "borrador" en Odoo (no se confirma automáticamente)
+        - label: El ref del pago sigue el patrón "studio-modulo" (ej. "218-39")
+        - label: Si Odoo rechaza un campo custom (Invalid field), el sync reintenta sin esos campos
+        - label: La cuenta sales_user_id se asigna al pago tras el create (write explícito)
+
+  # ─── 8. DNArchive ──────────────────────────────────────────────────
+  - type: checkboxes
+    id: ac-dnarchive
+    attributes:
+      label: 📜 DNArchive
+      options:
+        - label: Búsqueda de contratos DNArchive por inquilino matchea por clave de elector o CURP normalizadas
+        - label: Botón "Vincular existente" lista solo contratos DNArchive del inquilino que NO están ya vinculados
+        - label: Vincular contrato DNArchive existente refresca la UI automáticamente (sin recargar la página)
+        - label: Generar contrato desde plantilla envía firma por WhatsApp tras el pago de depósito
+        - label: Tras crear contrato DNArchive, aparece en el expediente del inquilino sin necesidad de refresh manual
+        - label: El category_id soporta múltiples valores separados por coma en DNARCHIVE_STUDIO_CATEGORY_ID
+        - label: Contrato DNArchive con estado "signed" se mapea a contrato LC "activo" al vincular
+
+  # ─── 9. Edificios / Studios ────────────────────────────────────────
+  - type: checkboxes
+    id: ac-edificios
+    attributes:
+      label: 🏢 Edificios y studios
+      options:
+        - label: Página individual del edificio muestra TODAS las propiedades con su estado actual (sin filtrar por fecha)
+        - label: Filtro de periodo SOLO afecta el card "Total cobrado" (no oculta propiedades)
+        - label: 'Toggle disponible ↔ mantenimiento aparece en el popover de cada studio (solo en esos dos estados)'
+        - label: Cambiar estado a "mantenimiento" se refleja inmediatamente sin recargar
+        - label: Card "Total cobrado por edificio" incluye pagos sin contrato (apartados, depósitos previos a firma)
+        - label: Atribución de pagos por edificio funciona vía metadatos (idEdificio, idBranchOdoo, ref "NNN-XX") + idContrato como fallback
+        - label: Studio en estado vaASalir dispara WhatsApp al admin con datos del inquilino + fechaFin del contrato
+
+  # ─── 10. Dashboard ─────────────────────────────────────────────────
+  - type: checkboxes
+    id: ac-dashboard
+    attributes:
+      label: 📊 Dashboard
+      options:
+        - label: Card "Cobrado" muestra suma real de sesiones completadas en el rango (no proyección)
+        - label: Card "Ingreso mensual" suma rentaMensual de contratos cuya vigencia incluye hoy
+        - label: Card "Anual proyectado" cuenta meses entre hoy y hoy+12 respetando fechaFin de cada contrato
+        - label: Card "Apartados activos" muestra total + cuántos llevan > 7 días sin convertir
+        - label: 'Card "Ocupación por edificio" muestra cobrado del mes coincidiendo con el de la página individual del edificio'
+        - label: Ya no aparecen las cards "Pendiente" ni "Cobranza activa" (eliminadas tras quitar Stripe)
+        - label: Filtro de periodo en el dashboard cambia los rangos calculados (mes actual, mes anterior, año actual)
+        - label: Contratos próximos a vencer en /dashboard muestra solo contratos activos con fechaFin en ≤15 días
+
+  # ─── 11. WhatsApp / Alertas ────────────────────────────────────────
+  - type: checkboxes
+    id: ac-whatsapp
+    attributes:
+      label: 💬 WhatsApp / Alertas
+      options:
+        - label: ⚠️ CRÍTICO — los crons NO envían NINGÚN mensaje automático al inquilino (verificar bitácora en /whatsapp tras día completo)
+        - label: Cron de las 9 AM avisa al ADMIN cuando un contrato está a 15 días de vencer
+        - label: Cron de las 9 AM avisa al ADMIN cuando un contrato está a 7 días de vencer
+        - label: Cron en ventana "vencimiento" finaliza contrato + libera propiedad SIN enviar mensaje
+        - label: Cuando una propiedad pasa a "vaASalir", el ADMIN recibe WhatsApp con datos del contrato activo
+        - label: Botón "¿Renuevas? (WhatsApp)" en /contratos/[id] envía mensaje al INQUILINO solo cuando se hace clic explícito
+        - label: El botón "¿Renuevas?" solo aparece en contratos activos con ≤60 días al vencer
+        - label: Cron de impagos (días 6+ del mes) avisa al ADMIN con lista de morosos
+        - label: Endpoint POST /whatsapp/anular-pendientes funciona como stop de emergencia
+        - label: Los crons de cobranza Stripe (días 1, 3, 5) están deshabilitados (no envían ni crean sesiones)
+        - label: Confirmación de pago al inquilino tras registrarPagoManual está deshabilitada
+
+  # ─── 12. Seguridad ─────────────────────────────────────────────────
+  - type: checkboxes
+    id: ac-security
+    attributes:
+      label: 🛡️ Seguridad
+      options:
+        - label: Rutas protegidas redirigen a /login si no hay token
+        - label: Errores 500 no devuelven stack traces ni paths internos del API
+        - label: El header X-Powered-By NO está expuesto (poweredByHeader false en next.config)
+        - label: Variables sensibles (DATABASE_URL, JWT_SECRET, ODOO_API_KEY) están solo en .env del VPS y no en el repo
+        - label: CORS permite solo el origen configurado en WEB_URL
+
+  # ─── 13. Performance ───────────────────────────────────────────────
+  - type: checkboxes
+    id: ac-perf
+    attributes:
+      label: ⚡ Performance
+      options:
+        - label: Cold load del dashboard (primera visita post-deploy) carga en menos de 5s
+        - label: Navegación entre páginas con caché caliente es subsecond
+        - label: Listado de inquilinos / contratos / sesiones-pago no excede 3s con datos reales
+        - label: Subir comprobante < 5MB se procesa y sincroniza en menos de 15s
+
+  # ─── 14. CI/CD ─────────────────────────────────────────────────────
+  - type: checkboxes
+    id: ac-cicd
+    attributes:
+      label: 🚀 CI/CD y despliegue
+      options:
+        - label: Push a rama QA dispara build de imágenes Docker en GHCR
+        - label: Imágenes etiquetadas como ghcr.io/desarrollodna/living-control-{api,web}:qa-latest + qa-{sha}
+        - label: docker compose pull && docker compose up -d en el VPS aplica la nueva versión sin caída prolongada
+        - label: Traefik enruta correctamente testauto2.dnapp.com.mx/api/* al API y / al web
+        - label: SSL con Let's Encrypt está activo en testauto2.dnapp.com.mx
+        - label: Migraciones de Prisma aplicadas correctamente en la BD remota
+
+  # ─── 15. Resultado global ──────────────────────────────────────────
+  - type: dropdown
+    id: result
+    attributes:
+      label: 🎯 Resultado global del QA
+      options:
+        - "✅ Aprobado para producción"
+        - "⚠️ Aprobado con observaciones menores (anotar abajo)"
+        - "❌ Rechazado — requiere correcciones (anotar abajo)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: findings
+    attributes:
+      label: 🔍 Hallazgos / observaciones
+      description: |
+        Para cada criterio que NO pasó, describe:
+        - Qué probaste (paso a paso)
+        - Qué esperabas
+        - Qué pasó realmente
+        - Capturas si aplica
+        Si son bugs grandes, abre issues SEPARADOS (uno por bug) y referencia desde acá.
+      placeholder: |
+        Ejemplos:
+        - [AC-pagos] Al cobrar "Depósito + 1ra renta" para el inquilino X (entra el día 14), el total fue $11,200 en vez de $10,700. El descuento del apartado no se aplicó porque la sesión apartado del flujo previo quedó sin idContrato. Issue separado: #42
+        - [AC-whatsapp] Después de finalizar contrato manualmente, el inquilino recibió mensaje "Renuevas". Esperaba que solo el botón manual lo enviara. Reproducible en Chrome 142.
+        - [AC-perf] Cold load del dashboard tarda 7s en producción. Investigar atribución P0-P3 con muchos pagos.
+      render: markdown
+    validations:
+      required: false
+
+  - type: input
+    id: time-spent
+    attributes:
+      label: ⏱️ Tiempo aproximado del QA
+      placeholder: "2h"
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        *Antes de marcar "Aprobado para producción", confirma que verificaste TODOS los flujos críticos en este entorno (no en local). Los flujos marcados con ⚠️ son los que más impacto tienen al cliente — un fallo ahí bloquea el merge a main.*
