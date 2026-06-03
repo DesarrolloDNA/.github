@@ -1,0 +1,170 @@
+name: 🧪 QA Review — Reportes Financieros DNA (solo aplica a este repo)
+description: "Revisión de QA del panel de Reportes Financieros (flujo-efectivo). Los criterios son específicos de este panel — NO usar en otros repos de la org."
+title: "[QA][flujo-efectivo] <feature/sprint que estás probando>"
+labels:
+  - qa
+body:
+  # ─── 1. Contexto de la prueba ──────────────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## 📋 Contexto de esta sesión de QA
+        Llena estos campos antes de empezar. Si algo no aplica, escribe N/A.
+
+  - type: input
+    id: branch
+    attributes:
+      label: Rama probada
+      placeholder: "QA"
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit SHA (primeros 7 chars)
+      description: Para reproducir exactamente lo que probaste
+      placeholder: "82b9ebf"
+    validations:
+      required: true
+
+  - type: input
+    id: env-url
+    attributes:
+      label: URL del entorno de pruebas
+      placeholder: "https://qa.dnapp.com.mx (VPS de pruebas)"
+    validations:
+      required: false
+
+  # ─── 2. Acceptance criteria críticos ────────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## ✅ Acceptance criteria — los 26 críticos
+
+  - type: checkboxes
+    id: ac-auth
+    attributes:
+      label: 🔐 Autenticación SSO y roles
+      options:
+        - label: Sin sesión, cualquier ruta protegida redirige al panel SSO (no se ve contenido)
+        - label: "Rol `user` no ve ni puede entrar (por URL) a Configuración / Manuales / Proyecciones / Sincronización"
+        - label: "[F2] En el entorno servido el login SSO real es obligatorio (SSO_DEV_BYPASS NO está activo)"
+
+  - type: checkboxes
+    id: ac-sync
+    attributes:
+      label: 🔄 Sincronización con Odoo
+      options:
+        - label: "Sync de Flujo (full) corre desde /sincronizacion y llega a COMPLETED reflejando datos nuevos"
+        - label: "Solo un sync RUNNING a la vez (segundo intento devuelve 409)"
+        - label: "[F3] Rol `user` no puede disparar ningún sync (POST devuelve 403)"
+
+  - type: checkboxes
+    id: ac-flujo
+    attributes:
+      label: 💧 Flujo de Efectivo
+      options:
+        - label: "SALDO EN FLUJO = SUMA FLUJO EFECTIVO − SUMAS FLUJO DE GASTOS − CTAS BALANCE (el total es coherente con las secciones)"
+        - label: "Toggle Línea/Semana cambia columnas (BL ↔ S1–S5); semanal con datos desde marzo 2026"
+        - label: "En vista semanal, la suma S1–S5 de cada fila = su TOTAL mensual"
+        - label: "Expandir NÓMINAS/GASTOS VARIOS/GASTOS FINANCIEROS muestra sub-filas por cuenta CON nombre y suman el bucket"
+
+  - type: checkboxes
+    id: ac-manuales
+    attributes:
+      label: 📝 Entradas Manuales y Proyecciones
+      options:
+        - label: "Entrada Manual aparece en el Flujo del mes con badge 'Manual' y signo correcto (INGRESOS suma; GASTOS/BALANCE restan)"
+        - label: "Solo rol admin puede crear/editar/borrar Entradas Manuales y Proyecciones"
+
+  - type: checkboxes
+    id: ac-estado-resultados
+    attributes:
+      label: 📊 Estado de Resultados
+      options:
+        - label: "Utilidad Bruta (Ingresos − Costos) y Utilidad Neta (Bruta − Gastos) se calculan y muestran correctamente"
+        - label: "Selector de dimensión (Consolidado / Negocio / Servicio / Producto) filtra correctamente"
+        - label: "El header de meses queda fijo (sticky) al hacer scroll vertical"
+
+  - type: checkboxes
+    id: ac-posicion-inmobiliaria
+    attributes:
+      label: 🏦 Posición de Caja e Inmobiliaria
+      options:
+        - label: "Posición de Caja muestra saldos al cierre por grupo (Fiscal / No Fiscal / No Operativo) y NO se suma al Flujo"
+        - label: "Flujo Inmobiliaria muestra los proyectos con split fiscal / no fiscal"
+
+  - type: checkboxes
+    id: ac-exports
+    attributes:
+      label: 📄 Exportaciones (Excel / PDF)
+      options:
+        - label: "Export Excel del Flujo trae la hoja 'COBROS POR SEMANA' con montos (no ceros) desde marzo 2026"
+        - label: "Las sub-filas de gastos en el Excel muestran el nombre de la cuenta (no solo el código)"
+        - label: "[F5] Una celda de texto que empieza con '=' se exporta como texto, NO se ejecuta como fórmula"
+
+  - type: checkboxes
+    id: ac-insights-dashboard
+    attributes:
+      label: 🔔 Dashboard e Insights
+      options:
+        - label: "Dashboard muestra KPIs y comparativo YoY del mismo periodo"
+        - label: "Insights genera las 9 reglas con severidad y links a la página relevante"
+
+  - type: checkboxes
+    id: ac-security
+    attributes:
+      label: 🛡️ Seguridad
+      options:
+        - label: "[F6] Un error 500 en sync NO devuelve el mensaje crudo de Odoo/DB (solo mensaje genérico + errorId)"
+        - label: "[F1] La app corre sobre Next.js 15.x y `npm run audit` no reporta HIGH/critical (check de CI verde)"
+        - label: "Cookie de sesión con flags HttpOnly + Secure + SameSite"
+
+  - type: checkboxes
+    id: ac-perf
+    attributes:
+      label: ⚡ Performance
+      options:
+        - label: "Navegación entre páginas en menos de ~1s con datos cacheados y un sync full no hace timeout"
+
+  # ─── 3. Resultado global ────────────────────────────────────────────
+  - type: dropdown
+    id: result
+    attributes:
+      label: 🎯 Resultado global del QA
+      options:
+        - "✅ Aprobado para producción"
+        - "⚠️ Aprobado con observaciones menores (anotar abajo)"
+        - "❌ Rechazado — requiere correcciones (anotar abajo)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: findings
+    attributes:
+      label: 🔍 Hallazgos / observaciones
+      description: |
+        Para cada criterio que NO pasó: qué probaste, qué esperabas, qué pasó y pasos para reproducir.
+        Si encuentras bugs grandes, abre issues SEPARADOS (uno por bug) y referencia desde acá.
+      placeholder: |
+        Ejemplo:
+        - [AC-flujo] En vista semanal la suma S1–S5 de NÓMINAS no da el TOTAL del mes. Chrome 142.
+        - [AC-exports] La hoja 'COBROS POR SEMANA' sale en ceros para marzo. Issue: #42
+      render: markdown
+    validations:
+      required: false
+
+  - type: input
+    id: time-spent
+    attributes:
+      label: ⏱️ Tiempo aproximado del QA
+      placeholder: "1h 30min"
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        *Marca cada criterio que verificaste. Para los que fallen, descríbelos en Hallazgos y abre un issue separado por cada bug grande.*
