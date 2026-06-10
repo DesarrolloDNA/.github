@@ -1,0 +1,129 @@
+name: 🧪 QA Review — Landing Page
+description: "QA sencillo para landing-pages de marcas de producto y distribuidoras. Marca cada criterio que pasó; anota abajo lo que falló."
+title: "[QA][landing] <marca / landing que estás probando>"
+labels:
+  - qa
+body:
+  # ─── 1. Criterios a evaluar ─────────────────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## ✅ Criterios a evaluar
+        Marca solo lo que SÍ pasó. Lo que no pase, descríbelo en "Hallazgos" al final.
+
+  - type: checkboxes
+    id: contenido
+    attributes:
+      label: 📝 Contenido y textos
+      options:
+        - label: El nombre de la marca/producto es correcto y consistente en toda la página
+        - label: No hay textos de relleno (lorem ipsum, "texto de ejemplo", placeholders)
+        - label: Sin faltas de ortografía ni errores de redacción
+        - label: Precios, promociones y vigencias mostradas son las correctas
+        - label: La información de la distribuidora (quién vende / dónde) es correcta
+
+  - type: checkboxes
+    id: imagenes
+    attributes:
+      label: 🖼️ Imágenes y multimedia
+      options:
+        - label: Todas las imágenes cargan (no hay íconos rotos ni cuadros vacíos)
+        - label: Las imágenes corresponden al producto/marca correctos
+        - label: Logos en buena resolución (no se ven pixeleados ni estirados)
+        - label: Videos/banners reproducen y se ven bien
+        - label: Las imágenes no tardan demasiado en cargar
+
+  - type: checkboxes
+    id: enlaces
+    attributes:
+      label: 🔗 Enlaces y botones
+      options:
+        - label: Todos los botones (CTA) funcionan y llevan al destino correcto
+        - label: No hay enlaces rotos (404) ni que apunten a "#" o a vacío
+        - label: Enlaces a redes sociales abren el perfil correcto
+        - label: Enlaces externos abren en pestaña nueva
+        - label: Botones de WhatsApp / "Comprar" / "Cotizar" llevan al destino esperado
+
+  - type: checkboxes
+    id: formularios
+    attributes:
+      label: 📋 Formularios
+      options:
+        - label: El formulario de contacto/registro envía correctamente
+        - label: Los campos obligatorios marcan error si se dejan vacíos
+        - label: Email y teléfono validan formato correcto
+        - label: Se muestra mensaje de confirmación al enviar
+        - label: El lead/correo llega a la bandeja o sistema correspondiente
+
+  - type: checkboxes
+    id: responsive
+    attributes:
+      label: 📱 Responsive (móvil y tablet)
+      options:
+        - label: Se ve bien en celular (nada se sale ni se encima)
+        - label: Se ve bien en tablet
+        - label: El menú funciona en móvil
+        - label: Los botones se pueden tocar fácil con el dedo
+        - label: No hay que hacer scroll horizontal para leer
+
+  - type: checkboxes
+    id: navegacion
+    attributes:
+      label: 🧭 Navegación y experiencia
+      options:
+        - label: El menú lleva a las secciones correctas
+        - label: Los anclajes/scroll a secciones funcionan
+        - label: La página carga en un tiempo razonable (menos de ~5s)
+        - label: El favicon y el título de la pestaña son los correctos
+        - label: Datos de contacto (teléfono, dirección, correo) son correctos y dan clic
+
+  - type: checkboxes
+    id: navegadores
+    attributes:
+      label: 🌐 Navegadores
+      options:
+        - label: Se ve bien en Chrome
+        - label: Se ve bien en Safari / iPhone
+        - label: Se ve bien en Edge o Firefox
+        - label: No aparecen errores en la consola del navegador
+
+  - type: checkboxes
+    id: legal
+    attributes:
+      label: ⚖️ Legal y básicos
+      options:
+        - label: Aviso de privacidad presente y con enlace funcional
+        - label: Año del footer correcto / sin "© 2023"
+        - label: La página usa HTTPS (candado en la barra de direcciones)
+        - label: Avisos de cookies / promociones con "letras chiquitas" presentes si aplica
+
+  # ─── 2. Resultado global ────────────────────────────────────────────
+  - type: dropdown
+    id: result
+    attributes:
+      label: 🎯 Resultado global del QA
+      options:
+        - "✅ Aprobado para publicar"
+        - "⚠️ Aprobado con observaciones menores (anotar abajo)"
+        - "❌ Rechazado — requiere correcciones (anotar abajo)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: findings
+    attributes:
+      label: 🔍 Hallazgos / observaciones
+      description: |
+        Para cada criterio que NO pasó, describe:
+        - Qué probaste
+        - Qué esperabas
+        - Qué pasó realmente
+        - En qué dispositivo/navegador
+      placeholder: |
+        Ejemplo:
+        - [Imágenes] El banner principal no carga en celular (Chrome Android). Se ve cuadro vacío.
+        - [Enlaces] El botón "Cotizar" lleva a # en vez de al WhatsApp.
+        - [Contenido] El precio dice $499 pero la promo vigente es $399.
+      render: markdown
+    validations:
+      required: false
