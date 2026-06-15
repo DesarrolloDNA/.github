@@ -1,0 +1,190 @@
+name: 🧪 QA Review — Thunder Army (tienda en línea)
+description: "Revisión de QA del e-commerce Thunder Army (Next.js + FastAPI + PostgreSQL + Stripe + Odoo + bot Thunder Bot con RAG/Gemini). 30 criterios específicos de este proyecto — NO usar en otros repos."
+title: "[QA][thunder] <feature/sprint que estás probando>"
+labels:
+  - qa
+body:
+  # ─── 1. Contexto de la prueba ──────────────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## 📋 Contexto de esta sesión de QA
+        Llena estos campos antes de empezar. Si algo no aplica, escribe N/A.
+        Antes de marcar checks, **abre la web y reproduce cada flujo en orden** — no copies de un QA anterior.
+        Usa SIEMPRE datos de prueba (tarjeta Stripe `4242 4242 4242 4242`, cuentas de QA) y verifica Odoo en la instancia de **DESARROLLO**.
+        Arquitectura: frontend Next (puerto 3001) → backend FastAPI (puerto 8010) → Postgres `thunder_army` + Odoo (lista de precios **WEB**, por SKU `PTTUA0x`) + Stripe + KeyVault/Gemini para el bot.
+
+  - type: input
+    id: branch
+    attributes:
+      label: Rama probada
+      description: ¿Sobre qué rama corres el QA?
+      placeholder: "dev-oscar / main"
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit SHA (primeros 7 chars)
+      description: Para reproducir exactamente lo que probaste
+      placeholder: "a1b2c3d"
+    validations:
+      required: true
+
+  - type: input
+    id: env-url
+    attributes:
+      label: URL del entorno de pruebas
+      placeholder: "http://localhost:3001 o URL del VPS de pruebas"
+    validations:
+      required: false
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser / dispositivo + versión
+      placeholder: "Chrome 142 (desktop), Safari iOS 18 (móvil)"
+    validations:
+      required: false
+
+  # ─── 2. Acceptance criteria (30 checks) ─────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## ✅ Acceptance criteria — 30 puntos. Lo que si rompe, rompe el negocio
+
+  - type: checkboxes
+    id: ac-auth
+    attributes:
+      label: 🔐 Autenticación y cuenta (4)
+      options:
+        - label: "1. Login con credenciales válidas entra y redirige; con inválidas muestra error genérico (sin filtrar si el correo existe) y bloquea la cuenta tras 5 intentos fallidos (lockout temporal)"
+        - label: "2. Registro crea la cuenta (contraseña mínimo 8 caracteres) y envía correo de verificación; NO se puede iniciar sesión hasta verificar (login sin verificar muestra \"debes verificar tu correo\")"
+        - label: "3. El enlace del correo abre /cuenta/verificado, activa la cuenta e inicia sesión automáticamente; reenviar verificación funciona"
+        - label: "4. Recuperar contraseña (/recuperar) completa el flujo con código de 6 dígitos por correo; logout invalida el JWT (token_version) — el token viejo deja de servir y /auth/me responde 401"
+
+  - type: checkboxes
+    id: ac-catalogo
+    attributes:
+      label: 🛍️ Catálogo y producto (3)
+      options:
+        - label: "5. La tienda (home #tienda / cortinas) carga los productos con precio y stock REALES de Odoo (lista WEB, por SKU); ningún producto en $0; un SKU con stock 0 en Odoo se refleja como agotado (sync al arranque y cada 30 min)"
+        - label: "6. El detalle del producto abre en las cortinas con galería e info; en UltraPure Whey cambiar de sabor (Choco Galleta / Vainilla Crunch) actualiza imagen y precio; /productos redirige a /#tienda"
+        - label: "7. Las imágenes de producto cargan desde /images/products/** (sin imágenes rotas) y \"Agregar al carrito\" funciona y abre/actualiza el carrito"
+
+  - type: checkboxes
+    id: ac-carrito
+    attributes:
+      label: 🛒 Carrito y envío (3)
+      options:
+        - label: "8. El drawer del carrito abre desde el header en cualquier página; cambiar cantidad / eliminar / vaciar recalcula el subtotal al instante con el precio en vivo de Odoo"
+        - label: "9. El carrito de invitado (localStorage) persiste al recargar la página"
+        - label: "10. Envío: GRATIS desde $1,250 MXN, $200 en compras menores — el total mostrado en el front cuadra EXACTO con el que recalcula el backend (server-side), sin excepciones"
+
+  - type: checkboxes
+    id: ac-checkout
+    attributes:
+      label: 💳 Checkout y pago (4)
+      options:
+        - label: "11. Estando logueado, el checkout PRELLENA email y nombre siempre, y teléfono + dirección si ya hay un pedido previo (dirección guardada del backend); el teléfono es a 10 dígitos"
+        - label: "12. El precio y el envío se recalculan SERVER-SIDE desde la BD/Odoo (por SKU): un carrito manipulado en el cliente NO puede cambiar el monto a cobrar"
+        - label: "13. Pago con tarjeta de PRUEBA (4242…) vía Stripe Checkout (redirect a Stripe) regresa a /checkout/exito, confirma el pago, muestra el número de pedido (TA-XXXX) y limpia el carrito"
+        - label: "14. Cancelar en la página de Stripe regresa a /checkout/cancelado con el carrito intacto y SIN cargo; una tarjeta rechazada permite reintentar. Solo hay pago con tarjeta Stripe (no SPEI/OXXO)"
+
+  - type: checkboxes
+    id: ac-pedidos-odoo
+    attributes:
+      label: 📦 Pedidos y sincronización con Odoo (4)
+      options:
+        - label: "15. El pedido pagado queda en la BD propia (orders/order_items) con número TA-XXXX, estado \"pagado\" y los productos/sabores/precios correctos (releídos de la BD, no del cliente)"
+        - label: "16. El pedido pagado se empuja a Odoo como sale.order en BORRADOR con contexto MENUDEO (compañía 1, equipo 5, sucursal 2, unidad 4, almacén configurado) y dirección de ENTREGA por pedido (partner_shipping_id); el total cuadra EXACTO, sin centavos de diferencia"
+        - label: "17. /cuenta → Mis Pedidos lista los pedidos del usuario (desde el backend /orders) con auto-actualización y estado correcto (pendiente/pagado→preparación/enviado/entregado)"
+        - label: "18. Tracking: al cargar la guía en Odoo (campo de guía única o tabla \"Guías Múltiples\" x_studio_guias), el pedido pasa a \"EN CAMINO\" en ≤5 min (o al abrir RASTREAR) y muestra TODAS las guías con su paquetería y enlace de rastreo"
+
+  - type: checkboxes
+    id: ac-promos
+    attributes:
+      label: 🎁 Promociones / paquetes (1)
+      options:
+        - label: "19. (Cuando existan combos) Una promoción/paquete se manda a Odoo como sus productos componentes (líneas individuales) a precio de lista, con un descuento por línea para que el neto = lo pagado por la promo; el cliente elige los sabores de cada componente. Si aún no hay combos cargados → N/A"
+
+  - type: checkboxes
+    id: ac-cuenta
+    attributes:
+      label: 👤 Mi cuenta — pestañas (3)
+      options:
+        - label: "20. Perfil: muestra nombre, correo y teléfono REALES del backend; el correo está bloqueado; guardar cambios persiste en la BD (PUT /auth/me) y se refleja; el avatar (subido) se guarda y aparece en navbar/sidebar"
+        - label: "21. Direcciones: la dirección del último pedido aparece guardada; \"Descargar comprobante (PDF)\" (solo en pedidos pagados) genera el comprobante con productos, totales, dirección y método de pago, aclarando que NO es factura fiscal (CFDI)"
+        - label: "22. Dashboard/Resumen y Favoritos: muestran datos reales (pedidos, gasto, favoritos) y todos los botones/enlaces del panel funcionan"
+
+  - type: checkboxes
+    id: ac-bot
+    attributes:
+      label: 🤖 Asistente Thunder Bot (RAG) (4)
+      options:
+        - label: "23. Thunder Bot responde con información REAL del sitio (productos, precios, envíos, pagos, marca) recuperada por RAG; no inventa precios, ingredientes ni promociones; responde en el idioma del usuario (es/en) y NO entrega códigos de cupón"
+        - label: "24. Al sugerir productos, muestra un CARRUSEL de cards de TAMAÑO FIJO (todas iguales) con precio en vivo de Odoo; las cards aparecen UNA sola vez al terminar la respuesta (sin parpadeo/saltos durante el streaming)"
+        - label: "25. En productos con variantes (UltraPure Whey) la card muestra selector de sabor; el botón AGREGAR mete el sabor elegido al carrito y abre el drawer; en productos de un solo sabor agrega directo"
+        - label: "26. NO da dosis ni consejo médico (deriva a un profesional de la salud) y maneja insultos al bot con una ADVERTENCIA firme y respetuosa, sin insultar de vuelta ni procesar el insulto como consulta normal"
+
+  - type: checkboxes
+    id: ac-correos-contenido
+    attributes:
+      label: ✉️ Correos y contenido (2)
+      options:
+        - label: "27. Llegan los correos transaccionales branded (verificación de cuenta, código de recuperación, pedido recibido y pago confirmado) vía el SMTP propio del backend — sin depender de WordPress/WooCommerce"
+        - label: "28. Blog, páginas legales (/aviso-privacidad, /terminos) y enlaces de marketplaces (Mercado Libre, Amazon) cargan y abren correctamente"
+
+  - type: checkboxes
+    id: ac-seguridad-ux
+    attributes:
+      label: 🛡️ Seguridad, datos y experiencia móvil (2)
+      options:
+        - label: "29. Rutas privadas (/cuenta/*, checkout) redirigen a login sin sesión; un usuario NO ve pedidos/direcciones de otro; las respuestas no exponen tokens/llaves/PII ni stack traces"
+        - label: "30. La web completa funciona en móvil (cortinas/tienda, drawer del carrito, checkout, panel de cuenta, bot y su carrusel) sin overflow ni errores rojos en consola; agregar al carrito desde el bot funciona en móvil"
+
+  # ─── 3. Resultado global ────────────────────────────────────────────
+  - type: dropdown
+    id: result
+    attributes:
+      label: 🎯 Resultado global del QA
+      options:
+        - "✅ Aprobado para producción"
+        - "⚠️ Aprobado con observaciones menores (anotar abajo)"
+        - "❌ Rechazado — requiere correcciones (anotar abajo)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: findings
+    attributes:
+      label: 🔍 Hallazgos / observaciones
+      description: |
+        Para cada criterio que NO pasó, describe:
+        - Número del check y qué probaste
+        - Qué esperabas
+        - Qué pasó realmente
+        - Pasos para reproducir
+        Si encuentras bugs grandes, abre issues SEPARADOS (uno por bug) y referencia desde acá.
+      placeholder: |
+        Ejemplo:
+        - [#7 catálogo] Las imágenes de producto salen rotas (faltan archivos en public/images). Reproducible en Chrome. Issue: #42
+        - [#16 odoo] La cotización quedó $0.01 abajo del pedido en envío gratis.
+      render: markdown
+    validations:
+      required: false
+
+  - type: input
+    id: time-spent
+    attributes:
+      label: ⏱️ Tiempo aproximado del QA
+      placeholder: "2h"
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        *Recuerda probar con datos de PRUEBA (Stripe test `4242 4242 4242 4242`, cuentas de QA). No uses tarjetas reales ni datos personales reales en el ambiente de pruebas, y verifica Odoo en la instancia de DESARROLLO. Ningún cambio va directo a producción sin pasar por el VPS de pruebas. Pendientes de prod conocidos: definir `SECRET_KEY` real y `STRIPE_WEBHOOK_SECRET`, y subir las imágenes a `public/images/`.*
