@@ -1,0 +1,178 @@
+name: 🧪 QA Review — NUCLEUS (tienda en línea)
+description: "Revisión de QA del e-commerce NUCLEUS (Next.js + FastAPI + PostgreSQL + Stripe + Odoo + bot NucleusBot con RAG/Gemini). 30 criterios específicos de este proyecto — NO usar en otros repos."
+title: "[QA][nucleus] <feature/sprint que estás probando>"
+labels:
+  - qa
+body:
+  # ─── 1. Contexto de la prueba ──────────────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## 📋 Contexto de esta sesión de QA
+        Llena estos campos antes de empezar. Si algo no aplica, escribe N/A.
+        Antes de marcar checks, **abre la web y reproduce cada flujo en orden** — no copies de un QA anterior.
+        Usa SIEMPRE datos de prueba (tarjeta Stripe `4242 4242 4242 4242`, cuentas de QA) y verifica Odoo en la instancia de **DESARROLLO**.
+        Arquitectura: frontend Next 16 (puerto **3000**) → backend FastAPI (puerto **8000**) → Postgres `nucleus` + Odoo (lista de precios **PREFERENTE**, por SKU `PTEUL0x`) + Stripe + KeyVault/Gemini para el bot **NucleusBot**.
+
+  - type: input
+    id: branch
+    attributes:
+      label: Rama probada
+      description: ¿Sobre qué rama corres el QA?
+      placeholder: "dev / QA"
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit SHA (primeros 7 chars)
+      description: Para reproducir exactamente lo que probaste
+      placeholder: "a1b2c3d"
+    validations:
+      required: true
+
+  - type: input
+    id: env-url
+    attributes:
+      label: URL del entorno de pruebas
+      placeholder: "http://localhost:3000 o URL del VPS de pruebas"
+    validations:
+      required: false
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser / dispositivo + versión
+      placeholder: "Chrome 142 (desktop), Safari iOS 18 (móvil)"
+    validations:
+      required: false
+
+  # ─── 2. Acceptance criteria (30 checks) ─────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## ✅ Acceptance criteria — 30 puntos. Lo que sí rompe, rompe el negocio
+
+  - type: checkboxes
+    id: ac-auth
+    attributes:
+      label: 🔐 Autenticación y cuenta (4)
+      options:
+        - label: "1. Login con credenciales válidas entra y redirige; con inválidas muestra error genérico (sin filtrar si el correo existe) y bloquea la cuenta tras 5 intentos fallidos (lockout temporal de 15 min)"
+        - label: "2. Registro NO crea el usuario en `users` hasta verificar el correo: queda como registro EN ESPERA (en Redis con caducidad, PENDING_REG_TTL); un registro abandonado o con datos chafa nunca contamina la tabla de usuarios"
+        - label: "3. Si el correo se escribió mal, el flujo permite CORREGIR el correo y reenviar la verificación; el enlace de verificación crea el usuario real (ya verificado) e inicia sesión; reenviar regenera el enlace y funciona"
+        - label: "4. Login con Google funciona como alternativa; logout invalida el JWT (el token viejo deja de servir) y redirige a inicio; el auto-refresh del token en 401 mantiene la sesión sin re-login"
+
+  - type: checkboxes
+    id: ac-catalogo
+    attributes:
+      label: 🛍️ Catálogo y producto (3)
+      options:
+        - label: "5. La Tienda y los Productos Destacados cargan con precio y stock REALES de Odoo (lista PREFERENTE, por SKU `PTEUL0x`); NADA hardcodeado (ni descuentos inventados, ni % de oferta falso); ningún producto en $0; un SKU con stock 0 en Odoo se refleja como agotado (sync al arranque y cada 5 min)"
+        - label: "6. El detalle del producto muestra galería sin imágenes rotas, descripción y datos reales desde la BD/Odoo; \"Agregar al carrito\" funciona con la animación de burbuja que vuela al ícono del carrito"
+        - label: "7. No se puede agregar más cantidad que el stock disponible (de Odoo): el botón \"+\" se BLOQUEA al llegar al límite tanto en el detalle del producto como en el drawer del carrito"
+
+  - type: checkboxes
+    id: ac-carrito
+    attributes:
+      label: 🛒 Carrito y envío (4)
+      options:
+        - label: "8. El drawer del carrito abre desde el header en cualquier página; cambiar cantidad / eliminar / vaciar recalcula el subtotal al instante y la acción se siente inmediata (sin lag)"
+        - label: "9. Al agregar un producto, la burbuja vuela al ícono del carrito y el carrito se abre AL LLEGAR la burbuja (no antes ni mucho después); el contador hace su rebote"
+        - label: "10. El carrito de invitado (localStorage) persiste al recargar la página y se fusiona al iniciar sesión"
+        - label: "11. Envío: GRATIS desde $1,250 MXN, $200 en compras menores — el total mostrado en el front cuadra EXACTO con el que recalcula el backend (server-side), sin excepciones"
+
+  - type: checkboxes
+    id: ac-checkout
+    attributes:
+      label: 💳 Checkout y pago (4)
+      options:
+        - label: "12. El scroll de la pasarela /checkout funciona correctamente (Lenis no bloquea el scroll de los paneles); estando logueado prellena email/nombre y la búsqueda de dirección (Google Places vía KeyVault) autocompleta calle/colonia/CP/ciudad/estado, SIN rellenar \"entre calles\" (que sí es obligatorio)"
+        - label: "13. Si un campo OBLIGATORIO queda vacío al intentar continuar, el campo se marca en ROJO (mismo comportamiento en checkout y en el registro)"
+        - label: "14. El precio y el envío se recalculan SERVER-SIDE desde la BD/Odoo (por SKU): un carrito manipulado en el cliente NO puede cambiar el monto a cobrar"
+        - label: "15. Pago con tarjeta de PRUEBA (4242…) vía Stripe Elements (tema oscuro \"night\", legible) confirma el pago por webhook, marca el pedido pagado, muestra el número de pedido y limpia el carrito; una tarjeta rechazada permite reintentar"
+
+  - type: checkboxes
+    id: ac-pedidos-odoo
+    attributes:
+      label: 📦 Pedidos y sincronización con Odoo (4)
+      options:
+        - label: "16. El pedido pagado queda en la BD propia (orders/order_items) con su número con prefijo `NCL` (no \"EL\"), estado \"pagado\" y los productos/precios correctos (releídos de la BD, no del cliente)"
+        - label: "17. El pedido pagado se empuja a Odoo como sale.order en BORRADOR con contexto MENUDEO (compañía 1, equipo 5, sucursal 2, unidad 4) y dirección de ENTREGA por pedido (partner_shipping_id / res.partner type=delivery); el total cuadra EXACTO"
+        - label: "18. El tracking refleja las guías de Odoo: guía única o MÚLTIPLES guías desde la tabla x_studio_guias (1, 2 o 3 paqueterías) con su número y paquetería; la caja de rastreo se ve con el diseño oscuro de marca"
+        - label: "19. /perfil?tab=pedidos lista los pedidos del usuario con estado correcto y permite \"Pagar ahora\" un pedido pendiente; el comprobante PDF (solo pedidos pagados) sale con el logo NUCLEUS, productos, totales, dirección y método de pago"
+
+  - type: checkboxes
+    id: ac-perfil
+    attributes:
+      label: 👤 Mi perfil — pestañas (3)
+      options:
+        - label: "20. Perfil/datos: muestra nombre y correo REALES del backend; el correo está bloqueado; guardar persiste en la BD y se refleja (todo cambio recae en la BD correctamente)"
+        - label: "21. Direcciones: agregar / editar / eliminar / predeterminar funcionan y persisten en la BD; cada botón y acción de cada pestaña del perfil responde sin errores silenciosos (toast en error)"
+        - label: "22. NO existe la pestaña \"Verificar productos\" NI \"Distribuidores\" en el perfil, y no quedan rutas, enlaces ni restos de esos módulos en ningún lado de la web"
+
+  - type: checkboxes
+    id: ac-bot
+    attributes:
+      label: 🤖 Asistente NucleusBot (RAG) (4)
+      options:
+        - label: "23. NucleusBot se presenta con ese nombre y responde con info REAL y COMPLETA del sitio (todas las pestañas y contenido: productos, precios, envíos $1,250/$200, pagos, marca, nosotros, blog, políticas) recuperada por RAG; no inventa precios, ingredientes ni promociones, ni da dosis/consejo médico (deriva a un profesional)"
+        - label: "24. En vez de escribir rutas/URLs en el texto, el bot NAVEGA por la web con la herramienta `navegar` (tienda, perfil, pedidos, nosotros, contacto, etc.): la página cambia por debajo y el chat NO se cierra al navegar"
+        - label: "25. El scroll funciona DENTRO de la ventana del bot (rueda y touch hacen scroll en el chat sin arrastrar la página de fondo) y el texto de las respuestas NO se sale del recuadro (word-wrap correcto)"
+        - label: "26. Al preguntar de forma general \"¿qué productos hay?\" / \"todos los productos\" el bot responde con el catálogo (tarjetas o derivando a la tienda con `navegar`), sin quedarse en blanco ni deflectar"
+
+  - type: checkboxes
+    id: ac-correos-marca
+    attributes:
+      label: ✉️ Correos, contenido y marca (4)
+      options:
+        - label: "27. Llegan los correos transaccionales branded NUCLEUS (verificación de correo, pago confirmado, pedido enviado, cambio de guía/paquetería) vía el SMTP propio, con el logo NUCLEUS visible y los colores de marca"
+        - label: "28. NO llegan correos DUPLICADOS con la misma información (dedup por firma de envío/last_shipping_notice); un cambio de guía o paquetería en Odoo dispara UN correo de actualización"
+        - label: "29. NO existe NINGUNA referencia a la marca vieja \"EuroLab/EUROLAB\" en toda la web ni en textos, nombres de producto, imágenes, logos, favicon, correos o número de pedido; el favicon es el de NUCLEUS en todas las páginas"
+        - label: "30. Nosotros (contenido genérico de la marca nueva, sin EuroLab, galería sin imágenes rotas y sin fondo en la primera imagen), Blog y páginas legales cargan correctamente; el fondo de marca (BrandBackdrop) se ve bien en nosotros/blog/perfil; el form de Contáctanos en /nosotros#contacto envía y llega al buzón configurado"
+
+  # ─── 3. Resultado global ────────────────────────────────────────────
+  - type: dropdown
+    id: result
+    attributes:
+      label: 🎯 Resultado global del QA
+      options:
+        - "✅ Aprobado para producción"
+        - "⚠️ Aprobado con observaciones menores (anotar abajo)"
+        - "❌ Rechazado — requiere correcciones (anotar abajo)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: findings
+    attributes:
+      label: 🔍 Hallazgos / observaciones
+      description: |
+        Para cada criterio que NO pasó, describe:
+        - Número del check y qué probaste
+        - Qué esperabas
+        - Qué pasó realmente
+        - Pasos para reproducir
+        Si encuentras bugs grandes, abre issues SEPARADOS (uno por bug) y referencia desde acá.
+      placeholder: |
+        Ejemplo:
+        - [#5 catálogo] Un producto muestra un -12% de descuento que no viene de Odoo. Reproducible en Chrome. Issue: #42
+        - [#18 odoo] Un pedido con 2 paqueterías solo muestra 1 guía en el tracking.
+      render: markdown
+    validations:
+      required: false
+
+  - type: input
+    id: time-spent
+    attributes:
+      label: ⏱️ Tiempo aproximado del QA
+      placeholder: "2h"
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        *Recuerda probar con datos de PRUEBA (Stripe test `4242 4242 4242 4242`, cuentas de QA). No uses tarjetas reales ni datos personales reales en el ambiente de pruebas, y verifica Odoo en la instancia de DESARROLLO. Ningún cambio va directo a producción sin pasar por el VPS de pruebas.*
