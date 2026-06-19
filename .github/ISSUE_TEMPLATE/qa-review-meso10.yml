@@ -1,5 +1,5 @@
 name: 🧪 QA Review — MESO 10 (tienda de mesoterapia)
-description: "Revisión de QA del e-commerce MESO 10 (Next.js 16 + FastAPI + PostgreSQL + Odoo + bot MesoBot RAG/Gemini). Enfocada en FUNCIONALIDAD (no en estética). El pago en línea y el login con Google están DESACTIVADOS a propósito. 30 criterios específicos de este proyecto — NO usar en otros repos."
+description: "Revisión de QA del e-commerce MESO 10 (Next.js + FastAPI + Odoo + MesoBot). Enfocada en funcionalidad. Pago y login con Google DESACTIVADOS a propósito. 30 criterios — NO usar en otros repos."
 title: "[QA][meso10] <feature/sprint que estás probando>"
 labels:
   - qa
