@@ -1,0 +1,209 @@
+name: 🧪 QA Review — MESO 10 (tienda de mesoterapia)
+description: "Revisión de QA del e-commerce MESO 10 (Next.js 16 + FastAPI + PostgreSQL + Odoo + bot MesoBot RAG/Gemini). Enfocada en FUNCIONALIDAD (no en estética). El pago en línea y el login con Google están DESACTIVADOS a propósito. 30 criterios específicos de este proyecto — NO usar en otros repos."
+title: "[QA][meso10] <feature/sprint que estás probando>"
+labels:
+  - qa
+body:
+  # ─── 1. Contexto de la prueba ──────────────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## 📋 Contexto de esta sesión de QA
+        Llena los campos antes de empezar. Si algo no aplica, escribe N/A.
+        **Abre la web y reproduce cada flujo en orden** — no copies de un QA anterior. El foco es **FUNCIONALIDAD**: que las cosas *funcionen*, que los **cálculos sean correctos y NO manipulables desde el cliente**, que **no haya errores rojos en consola** y que **la vista móvil funcione** (sin overflow ni roturas). La estética es secundaria.
+
+        **Arquitectura:** frontend **Next.js 16** (puerto **3002** en local) → backend **FastAPI** (puerto **8001** en local, corre en **Docker**: `docker compose up -d`) → **Postgres** (pgvector, schema `public`) + **Odoo** (catálogo `CATALOG_SOURCE=odoo`, precio por **pricelist PREFERENTE**, SKU prefijo **`PTM10`**) + **KeyVault/Gemini** para el bot **MesoBot** (`gemini-2.5-flash`).
+
+        **Reglas de negocio:** la compra **requiere cuenta** (NO hay checkout de invitado); productos = **cócteles/viales de mesoterapia** para mujeres (uso bajo supervisión profesional, sin claims médicos); **envío $236 MXN**, **GRATIS en promociones/paquetes**; verificación de autenticidad por **códigos** (QR, tope de activaciones); número de pedido **`MESO10-AAAAMMDD-XXXXXX`**.
+
+        ## ⚠️ DESACTIVADO a propósito (NO reportar como bug)
+        Por el **cambio de método de compra**, dos funciones están **apagadas** de forma intencional:
+        - 💳 **Pago en línea (Stripe) → EN MANTENIMIENTO** (`PAYMENTS_ENABLED=false`). QA debe **verificar que el estado de mantenimiento funciona** (checks 15–16): el botón de pagar avisa "en mantenimiento", el checkout muestra el aviso y **NO se crea ningún pedido**. **No** intentes pagar con Stripe ni lo marques como falla.
+        - 🔐 **Login con Google (OAuth) → DESACTIVADO** (`GOOGLE_AUTH_ENABLED=false`). QA debe **verificar que el botón de Google NO aparece** (check 3). No lo reportes como "el botón no funciona".
+
+        👉 Los criterios que **dependen del cobro** (compra completa, recálculo final server-side al pagar, creación de pedido nuevo y su push a Odoo) están marcados **🔒 BLOQUEADO — validar al reactivar el cobro** y se probarán cuando esté listo el nuevo método de pago. Para esos, valida lo que SÍ es alcanzable hoy (carrito, totales de previsualización, pedidos ya existentes).
+
+        Usa SIEMPRE datos de prueba y verifica Odoo en la instancia de **DESARROLLO**.
+
+  - type: input
+    id: branch
+    attributes:
+      label: Rama probada
+      placeholder: "dev / main"
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit SHA (primeros 7 chars)
+      placeholder: "a1b2c3d"
+    validations:
+      required: true
+
+  - type: input
+    id: env-url
+    attributes:
+      label: URL del entorno de pruebas
+      placeholder: "http://localhost:3002 · http://192.168.1.x:3002 · URL del VPS de pruebas"
+    validations:
+      required: false
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser / dispositivo + versión
+      placeholder: "Chrome 142 (desktop), Safari iOS 18 (móvil)"
+    validations:
+      required: false
+
+  # ─── 2. Acceptance criteria ─────────────────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## ✅ Acceptance criteria — 30 puntos. Prioriza lo que rompe el negocio: cálculos, datos, promos y errores de consola.
+
+  - type: checkboxes
+    id: ac-auth
+    attributes:
+      label: 🔐 Autenticación y cuenta (4)
+      options:
+        - label: "1. Login: credenciales válidas entran y redirigen; inválidas muestran error genérico (sin revelar si el correo existe) y bloquean la cuenta tras varios intentos fallidos (lockout temporal)"
+        - label: "2. Registro: crea la cuenta (contraseña mínimo 8 caracteres) y envía correo de verificación; NO se puede iniciar sesión sin verificar (avisa que se debe verificar el correo); reenviar verificación funciona; el enlace del correo verifica la cuenta"
+        - label: "3. **Login con Google DESACTIVADO**: en /login y /registro NO debe aparecer el botón 'Continuar con Google' ni el separador 'O con tu correo'; el formulario de correo queda limpio. (No reportar como bug — está apagado a propósito)"
+        - label: "4. Recuperar contraseña (/recuperar) completa el flujo con código por correo; cerrar sesión invalida el JWT (el token viejo deja de servir y /auth/me responde 401)"
+
+  - type: checkboxes
+    id: ac-catalogo
+    attributes:
+      label: 🛍️ Catálogo y producto — datos reales de Odoo (3)
+      options:
+        - label: "5. La tienda (/tienda) carga productos con **precio y stock REALES de Odoo** (pricelist PREFERENTE, SKU `PTM10`); **ningún producto en $0**; un SKU con stock 0 se refleja como agotado; el sync corre al arranque y periódicamente"
+        - label: "6. Filtros y orden de la tienda (categoría, en stock, en oferta, precio, orden) funcionan y **al cambiar de filtro las cards NO desaparecen ni quedan en blanco**; la categoría 'Promociones' aparece si hay paquetes publicados; el buscador funciona"
+        - label: "7. Detalle (/producto/[slug]) abre con info y permite 'Agregar al carrito'; **un producto SIN imagen NO debe aparecer en la tienda** (debe estar oculto del catálogo); no hay imágenes rotas"
+
+  - type: checkboxes
+    id: ac-carrito
+    attributes:
+      label: 🛒 Carrito y envío — cálculos correctos (3)
+      options:
+        - label: "8. El drawer del carrito abre desde el navbar en cualquier página (excepto en el flujo de checkout, donde el ícono se oculta a propósito); cambiar cantidad / eliminar / vaciar **recalcula el subtotal al instante**; el carrito **persiste al recargar** (localStorage para invitado) y se fusiona al iniciar sesión"
+        - label: "9. Totales del carrito correctos: subtotal por ítem y suma; envío **$236 MXN** y **GRATIS** cuando todo el carrito es de promoción/paquete; los números cuadran (sin centavos raros)"
+        - label: "10. En **móvil** el carrito se ve completo: **la lista de productos NO se corta ni queda detrás del panel del resumen**, hace scroll, y NO se transparenta la página de atrás"
+
+  - type: checkboxes
+    id: ac-promos
+    attributes:
+      label: 🎁 Promociones / paquetes (4)
+      options:
+        - label: "11. En /admin/promociones se crea una promo tipo **'arma tu paquete'** (N activos a elegir de productos reales) y tipo **'combo'** (set fijo), con precio, descripción, portada subida y publicar/destacar; el **modal de creación scrollea bien** (se ven todas las opciones y los botones); al crear/borrar, el cambio se refleja **al instante** en tienda/inicio"
+        - label: "12. En el detalle del paquete el cliente arma su selección (o ve el combo con su lista 'Incluye'); en el carrito el paquete se ve **diferenciado** (badge 'Paquete', envío gratis, lista de lo que incluye); en el inicio las promos salen entre los 'Productos destacados' (máx. 3 cards) y la imagen de la promo reemplaza a la mujer del hero de la tienda"
+        - label: "13. Acceso por rol: un usuario con rol **'ofertas'** entra SOLO al panel de Promociones (no a los demás paneles ni a Administradores); navegar y 'Agregar al carrito' siguen funcionando para todos"
+        - label: "14. 🔒 **BLOQUEADO — validar al reactivar el cobro:** al comprar un paquete, Odoo lo recibe con sus **productos componentes como líneas individuales** y el **precio prorrateado al centavo** (total exacto, sin diferencias). Por ahora solo verificar que el paquete se arma y agrega al carrito correctamente"
+
+  - type: checkboxes
+    id: ac-checkout
+    attributes:
+      label: 💳 Checkout y pago — DESACTIVADO (en mantenimiento) (3)
+      options:
+        - label: "15. NO hay compra como invitado: sin sesión, /checkout (o el botón de pagar) redirige a login; el MesoBot tampoco debe decir que se puede comprar sin cuenta"
+        - label: "16. **Pago en mantenimiento (verificar que funciona el estado):** el botón del carrito muestra 'Pagos en mantenimiento' (deshabilitado); /checkout y /checkout/pagar/[id] muestran la **pantalla de mantenimiento**; **NO se crea ningún pedido** (`POST /orders/checkout` y `/payments/intent` responden 503); no hay ningún cargo"
+        - label: "17. 🔒 **BLOQUEADO — validar al reactivar el cobro:** flujo de compra completo — prellenado de datos del usuario, **recálculo SERVER-SIDE NO manipulable** (alterar precio/carrito desde el cliente no cambia el monto), pago Stripe TEST `4242 4242 4242 4242` → /checkout/exito → pedido `MESO10-…` → carrito limpio; tarjeta rechazada deja el carrito intacto sin cargo"
+
+  - type: checkboxes
+    id: ac-pedidos-odoo
+    attributes:
+      label: 📦 Pedidos y sincronización con Odoo (3)
+      options:
+        - label: "18. /perfil (pestaña Pedidos) lista los pedidos **existentes** del usuario con estado correcto; filtros y buscador por número de pedido funcionan; el comprobante/PDF (en pedidos pagados) se genera con el logo de MESO 10, productos, totales y dirección"
+        - label: "19. Tracking (con pedidos existentes): al validar el picking / cargar la guía en Odoo, el pedido pasa a 'En camino'/'Entregado', la barra de avance lo refleja y llega el correo de envío con la guía/enlace de rastreo"
+        - label: "20. 🔒 **BLOQUEADO — validar al reactivar el cobro:** un pedido nuevo pagado queda en la BD con número `MESO10-…` y estado 'pagado', y se **empuja a Odoo** como sale.order en contexto MENUDEO (company 1 = DNA Evoluciona, branch 2, team 5, unidad de negocio 4, almacén configurado) con dirección de entrega y total exacto"
+
+  - type: checkboxes
+    id: ac-cuenta
+    attributes:
+      label: 👤 Mi cuenta y cuenta dueña (3)
+      options:
+        - label: "21. Perfil: muestra nombre, correo y teléfono REALES del backend (correo bloqueado); guardar cambios persiste y se refleja; el avatar subido aparece en navbar/perfil"
+        - label: "22. **Cuenta dueña (OWNER):** al entrar a /perfil **redirige directo al panel de administración** (no ve el perfil de cliente); el avatar del navbar lleva al panel; SOLO la cuenta dueña ve y usa /admin/admins (gestión de administradores/roles) y **no puede quitarse su propio acceso**"
+        - label: "23. Dashboard del perfil (resumen): muestra datos reales (pedidos, total pagado, dirección principal); todos los botones/enlaces del panel y de la sidebar funcionan, incluida la versión móvil desplegable"
+
+  - type: checkboxes
+    id: ac-admin
+    attributes:
+      label: 🧮 Panel admin y métricas — números correctos (3)
+      options:
+        - label: "24. /admin/analytics muestra métricas con **números reales y coherentes** (sesiones, vistas, carrito, conversión, embudo, etc.); el rango de días (7/30/…) cambia los datos; NO hay valores en NaN/undefined/0 cuando sí hubo actividad"
+        - label: "25. /admin/usuarios y /admin/actividad listan datos reales y sus filtros/paginación funcionan; /admin/codigos (autenticidad) y /admin/pedidos cargan y operan; todos los enlaces del menú lateral del panel funcionan"
+        - label: "26. /admin/admins (solo cuenta dueña): lista usuarios, permite cambiar rol (customer/ofertas/analytics/admin) y crear usuarios; un admin no-dueño NO puede entrar"
+
+  - type: checkboxes
+    id: ac-folios
+    attributes:
+      label: 🔎 Verificación de autenticidad — códigos (2)
+      options:
+        - label: "27. Admin (/admin/codigos): genera/lista códigos (QR imprimible) y muestra conteo de verificados; el flujo no duplica ni rompe con códigos ya existentes"
+        - label: "28. Verificación pública (/perfil?tab=verificar o el enlace con ?code=): un código válido muestra 'auténtico' con su conteo de activaciones y fecha; al superar el tope da 'ya utilizado'; un código inexistente da 'no encontrado'; el código se normaliza (mayúsculas/sin espacios)"
+
+  - type: checkboxes
+    id: ac-bot
+    attributes:
+      label: 🤖 Asistente MesoBot (RAG) (1)
+      options:
+        - label: "29. MesoBot responde como **MESO 10** (NUNCA dice 'EuroBot'/'EuroLab'/anabólicos) con info REAL del sitio por RAG (productos, precios, envíos, marca); **no inventa** precios/ingredientes/promos; **NO da dosis ni consejo médico** (deriva a un profesional); **NO expone estados internos de la BD** (pending/paid/…), solo describe la etapa en lenguaje natural; **no dice que se puede comprar sin cuenta**; al sugerir productos muestra un **carrusel de cards de tamaño fijo** con precio en vivo que aparecen **sin parpadeo** al terminar la respuesta; el bot **no se abre solo** y cierra con X / clic fuera / Escape; **el scroll dentro del chat NO mueve la página**"
+
+  - type: checkboxes
+    id: ac-seguridad-movil
+    attributes:
+      label: 🛡️ Seguridad · móvil · consola · correos (1)
+      options:
+        - label: "30. Rutas privadas (/perfil, /admin/*, /checkout) redirigen a login sin sesión; un usuario NO ve pedidos/direcciones/códigos de otro; las respuestas **no exponen tokens/llaves/PII ni stack traces**. **NO hay errores rojos en consola** navegando tienda/detalle/carrito/checkout/perfil/admin/bot. **Móvil:** tienda, drawer del carrito, checkout (mantenimiento), panel admin, bot+carrusel y verificación funcionan **sin overflow horizontal** ni roturas. Llegan los **correos branded** (verificación de cuenta, código de recuperación) por el SMTP del backend; blog y páginas legales (/politicas/*) cargan"
+
+  # ─── 3. Resultado global ────────────────────────────────────────────
+  - type: dropdown
+    id: result
+    attributes:
+      label: 🎯 Resultado global del QA
+      options:
+        - "✅ Aprobado para producción"
+        - "⚠️ Aprobado con observaciones menores (anotar abajo)"
+        - "❌ Rechazado — requiere correcciones (anotar abajo)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: findings
+    attributes:
+      label: 🔍 Hallazgos / observaciones
+      description: |
+        Para cada criterio que NO pasó, describe:
+        - Número del check y qué probaste
+        - Qué esperabas
+        - Qué pasó realmente
+        - Pasos para reproducir (y si hay error en consola, pégalo)
+        Si encuentras bugs grandes, abre issues SEPARADOS (uno por bug) y referencia desde acá.
+        Recuerda: el pago y el login de Google están **apagados a propósito** — eso NO es un hallazgo.
+      placeholder: |
+        Ejemplo:
+        - [#6 catálogo] Al filtrar por 'reductivos' las cards quedan en blanco hasta hacer scroll. Chrome 142. Issue: #42
+        - [#16 pago] /checkout NO muestra la pantalla de mantenimiento: deja avanzar y crea un pedido en 'pending' (¡no debería!).
+        - [#29 bot] El bot dijo "tu pedido está en estado paid" en vez de describir la etapa.
+      render: markdown
+    validations:
+      required: false
+
+  - type: input
+    id: time-spent
+    attributes:
+      label: ⏱️ Tiempo aproximado del QA
+      placeholder: "2h"
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        *Recuerda: **pago en línea y login con Google están DESACTIVADOS a propósito** (cambio de método de compra). QA verifica que esos estados funcionan; NO los reporta como bug. Los criterios 🔒 (compra completa, recálculo final al pagar, pedido nuevo + push a Odoo) se validan cuando se reactive el cobro.*
+        *Usa datos de PRUEBA y verifica Odoo en la instancia de DESARROLLO. Ningún cambio va directo a producción sin pasar por el VPS de pruebas.*
+        *Backend horneado en Docker: cambios de código requieren rebuild (`docker compose build api worker beat && docker compose up -d`); los toggles (`PAYMENTS_ENABLED`, `GOOGLE_AUTH_ENABLED`) son variables de entorno (recrear contenedores, sin rebuild).*
