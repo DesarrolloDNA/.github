@@ -1,5 +1,5 @@
 name: 🧪 QA Review — Autoback Endpoints, Auth & Sync (solo aplica al repo autoback)
-description: "Checklist de QA del backend autoback: auth doble en /api/ (X-API-Key + JWT cookie), aislamiento por empresa (TODO-007), gate /auto/ y sincronizaciones Odoo vía DATABACK. NO usar en otros repos de la org."
+description: "QA del backend autoback: auth doble en /api/, aislamiento por empresa (TODO-007), gate /auto/ y sync Odoo vía DATABACK. Solo aplica al repo autoback."
 title: "[QA][autoback] Release <vX.Y.Z>"
 labels:
   - qa
