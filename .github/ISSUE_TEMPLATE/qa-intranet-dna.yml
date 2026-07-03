@@ -243,3 +243,5 @@ body:
       value: |
         ---
         *Probar SIEMPRE con datos y cuentas de PRUEBA; Odoo en la instancia de DESARROLLO. Revisar en móvil (~375px) y desktop. Ningún cambio va directo a producción sin pasar por el VPS de pruebas.*
+
+# actualizado: fuerza re-escaneo de plantillas de issue en GitHub
