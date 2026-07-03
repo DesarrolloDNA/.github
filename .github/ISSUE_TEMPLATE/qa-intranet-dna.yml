@@ -1,20 +1,17 @@
-name: 🧪 QA Review — Intranet DNA Evoluciona
-description: "Revisión de QA de la Intranet DNA Evoluciona (Next.js 16 + FastAPI + PostgreSQL + Odoo). 45 criterios: funcional + responsivo móvil + seguridad (F1–F5). Específicos de este proyecto — NO usar en otros repos."
-title: "[QA][intranet-dna] <feature/sprint que estás probando>"
+name: "🧪 QA Review - Intranet DNA Evoluciona"
+description: "QA de la Intranet DNA Evoluciona (Next.js 16 + FastAPI + PostgreSQL + Odoo). 30 criterios: funcional, responsivo movil y seguridad F1 a F5. Especifico de este repo, NO usar en otros."
+title: "[QA][intranet-dna] <feature/sprint que estas probando>"
 labels:
   - qa
 body:
-  # ─── 1. Contexto de la prueba ──────────────────────────────────────
   - type: markdown
     attributes:
       value: |
-        ## 📋 Contexto de esta sesión de QA
-        Llena estos campos antes de empezar. Si algo no aplica, escribe N/A.
-        Antes de marcar checks, **abre la web y reproduce cada flujo en orden** — no copies de un QA anterior.
-        Prueba en **móvil (~360–414px)** Y en **escritorio**: gran parte del sprint fue responsivo y el desktop NO debe cambiar respecto a antes.
-        Usa SIEMPRE datos y cuentas de PRUEBA; verifica Odoo en la instancia de **DESARROLLO**. Ningún cambio va a producción sin pasar por el **VPS de pruebas**.
-        Arquitectura: frontend **Next 16** (puerto **3005**) → backend **FastAPI** (puerto **8010**) → Postgres (Docker) + sync con **Odoo** (solo `company_id=1`). Sesión con **JWT Bearer** (access 60 min, refresh **7 días** que rota). Roles: `super_admin` > `director` > `gerente` > `coordinador` > `colaborador` (RH = Director por puesto "Capital Humano/RH").
-
+        ## Contexto de esta sesion de QA
+        Llena estos campos antes de empezar (si algo no aplica, escribe N/A) y reproduce cada flujo en la web, en orden.
+        Prueba en movil (~360-414px) Y en escritorio: gran parte del sprint fue responsivo y el desktop NO debe cambiar respecto a antes.
+        Usa datos y cuentas de PRUEBA; Odoo en DESARROLLO. Nada va a produccion sin pasar por el VPS de pruebas.
+        Stack: Next 16 (3005) hacia FastAPI (8010) hacia Postgres + Odoo (company_id=1). Sesion JWT Bearer (access 60 min, refresh 7 dias que rota). Roles: super_admin, director, gerente, coordinador, colaborador (RH = Director por puesto Capital Humano/RH).
   - type: input
     id: branch
     attributes:
@@ -22,224 +19,137 @@ body:
       placeholder: "dev / QA"
     validations:
       required: true
-
   - type: input
     id: commit
     attributes:
       label: Commit SHA (primeros 7 chars)
-      description: Para reproducir exactamente lo que probaste
       placeholder: "a1b2c3d"
     validations:
       required: true
-
   - type: input
     id: rol
     attributes:
       label: Rol(es) con los que probaste
-      description: Muchos criterios dependen del rol; indica con cuáles verificaste
-      placeholder: "super_admin, colaborador, RH (director)…"
+      placeholder: "super_admin, colaborador, RH (director)"
     validations:
       required: true
-
   - type: input
     id: env-url
     attributes:
       label: URL del entorno de pruebas
-      placeholder: "http://127.0.0.1:3005 o URL del VPS de pruebas / LAN"
+      placeholder: "http://127.0.0.1:3005 o VPS/LAN"
     validations:
       required: false
-
   - type: input
     id: browser
     attributes:
-      label: Browser / dispositivo + versión
-      placeholder: "Chrome 142 (desktop), Safari iOS 18 (móvil ~390px)"
+      label: Browser / dispositivo + version
+      placeholder: "Chrome 142 (desktop), Safari iOS 18 (movil)"
     validations:
       required: false
-
-  # ─── 2. Acceptance criteria (45 checks) ─────────────────────────────
   - type: markdown
     attributes:
       value: |
-        ## ✅ Acceptance criteria — 45 puntos
-        Cada check es binario: o pasa tal cual está descrito, o se documenta abajo como hallazgo.
-
+        ## Acceptance criteria - 30 puntos
+        Cada check pasa tal cual esta descrito o se documenta abajo como hallazgo.
   - type: checkboxes
     id: ac-auth
     attributes:
-      label: 🔐 Autenticación, sesión y roles (4)
+      label: "Autenticacion, sesion y roles (4)"
       options:
-        - label: "1. Login con credenciales válidas entra y redirige; con inválidas muestra error genérico (sin revelar si el correo existe) y bloquea tras varios intentos; un usuario con cambio de contraseña pendiente es forzado a cambiarla en el primer ingreso"
-        - label: "2. Cerrar sesión invalida el token (el viejo deja de servir) y redirige a /login; el auto-refresh al recibir 401 mantiene la sesión sin re-login mientras el refresh siga vigente"
-        - label: "3. (F5) El refresh dura 7 días y ROTA en cada uso: un usuario activo NO se desloguea; uno inactivo más de 7 días debe volver a iniciar sesión"
-        - label: "4. Los permisos por rol se respetan: un colaborador NO ve Administración ni botones de gestión; RH ve las bandejas que le tocan; cada acción restringida responde 403 en el backend (no solo se oculta en el front)"
-
+        - label: "1. Login valido entra y redirige; invalido muestra error generico (sin revelar si el correo existe) y bloquea tras varios intentos; el cambio de contrasena se fuerza en el primer ingreso"
+        - label: "2. Cerrar sesion invalida el token (el viejo deja de servir) y redirige a login; el auto-refresh en 401 mantiene la sesion sin re-login"
+        - label: "3. (F5) El refresh dura 7 dias y rota en cada uso: un usuario activo NO se desloguea; uno inactivo mas de 7 dias vuelve a iniciar sesion"
+        - label: "4. Permisos por rol: un colaborador NO ve Administracion ni botones de gestion; RH ve sus bandejas; cada accion restringida responde 403 en el backend, no solo se oculta"
   - type: checkboxes
     id: ac-responsive
     attributes:
-      label: 📱 Responsivo móvil — global (5)
+      label: "Responsivo movil (4)"
       options:
-        - label: "5. En móvil NO hay scroll horizontal en NINGUNA sección: nada se sale a la derecha ni queda cortado; el contenido queda centrado y completo (revisar TODAS las páginas a ~360–414px)"
-        - label: "6. Header móvil: logo a la izquierda, campana + hamburguesa a la derecha, buscador oculto; el menú abre el drawer lateral con el perfil arriba (avatar/nombre/rol), navegación por secciones y acciones de cuenta (Administración solo super admin, Mis primeros pasos, Cerrar sesión)"
-        - label: "7. Footer compacto en móvil (2 columnas) y las ventanas flotantes (modales) ocupan casi todo el ancho, con scroll interno, botón \"Cancelar\" oculto (se cierra con la X) y el botón principal a lo ancho"
-        - label: "8. Botones, textos, imágenes, videos, tablas y contenedores se ven bien en móvil (tipografías reducidas donde tocaba, tablas con scroll propio o en tarjetas, grids a 1 columna); en ESCRITORIO todo queda EXACTAMENTE igual que antes (no se tocó desktop)"
-        - label: "9. Los filtros/tabs que antes se apilaban feo ahora caben (cuadrícula 2×2 o scroll horizontal) y los asistentes por pasos (encuestas/evaluaciones) muestran UN paso a la vez en móvil"
-
+        - label: "5. En movil NO hay scroll horizontal en ninguna seccion: nada se sale a la derecha ni queda cortado; todo centrado y completo (revisar todas las paginas a ~360-414px)"
+        - label: "6. Header movil: logo a la izquierda, campana y hamburguesa a la derecha, buscador oculto; el drawer trae el perfil arriba, la navegacion por secciones y las acciones de cuenta"
+        - label: "7. Footer compacto (2 columnas) y las ventanas flotantes ocupan casi todo el ancho, con scroll interno, Cancelar oculto (se cierra con la X) y el boton principal a lo ancho"
+        - label: "8. Botones, textos, imagenes, tablas y contenedores se ven bien en movil (tablas como tarjetas o con scroll propio, grids a 1 columna); en escritorio todo queda IGUAL que antes"
   - type: checkboxes
     id: ac-inicio
     attributes:
-      label: 🏠 Inicio / Dashboard (2)
+      label: "Inicio, Noticias y Reconocimientos (3)"
       options:
-        - label: "10. El inicio carga con datos REALES (novedades, pendientes, próximos cumpleaños, reconocimientos, \"¿Sabías que?\") sin restos de demo; accesos rápidos y widgets llevan a su sección"
-        - label: "11. En móvil los pares de botones del hero (Ver novedades / Directorio) y del banner de la guía quedan uno al lado del otro con el texto en UNA línea, y el fondo no recorta el contenido"
-
+        - label: "9. Inicio con datos reales (novedades, pendientes, cumpleanos, reconocimientos); los botones del hero quedan en una linea sin recortes en movil"
+        - label: "10. Noticias: solo publicadas para todos (borradores y programadas solo editores); crear/editar (portada, categoria, adjuntos, programacion) funciona; las vistas solo suben en noticias visibles (F4)"
+        - label: "11. Reconocimientos: publicar con regalo (sin auto-publicar con Enter) y aprobacion de RH; muro y destacado correctos; en movil pestanas sin scroll y botones lado a lado"
   - type: checkboxes
-    id: ac-noticias
+    id: ac-personas
     attributes:
-      label: 📰 Noticias (3)
+      label: "Directorio, Organigrama, Areas y Cumpleanos (3)"
       options:
-        - label: "12. El listado muestra publicadas; borradores/programadas/expiradas solo las ven editores; abrir una noticia muestra el contenido completo; el contador de vistas solo sube en noticias visibles (F4)"
-        - label: "13. Crear/editar noticia (Gerente+): portada, categoría, adjuntos/enlaces, programación y caducidad funcionan y persisten; el editor y la barra de categorías se ven bien en móvil"
-        - label: "14. En móvil el título es \"Noticias DNA\", las categorías se deslizan en una fila, las tarjetas quedan centradas y el toast \"¿Sabías que?\" NO empuja ni recorre el layout"
-
-  - type: checkboxes
-    id: ac-reconocimientos
-    attributes:
-      label: 🏆 Reconocimientos y regalos (3)
-      options:
-        - label: "15. Publicar un reconocimiento con regalo funciona (asistente por pasos; NO se auto-publica con Enter); el regalo queda pendiente de aprobación de RH; el muro y el destacado muestran datos correctos"
-        - label: "16. Aprobar/rechazar/entregar regalos solo lo ve y opera RH (Gerente+); el catálogo de productos (Odoo) carga; el chip de regalo respeta quién puede verlo (autor / RH / destinatario)"
-        - label: "17. Móvil: botón \"Nueva\" a lo ancho, pestañas Muro/Mis regalos/Regalos·RH sin scroll, tarjetas centradas, botones del destacado uno al lado del otro y el modal \"Reconocer\" sin desbordes en los 4 pasos"
-
-  - type: checkboxes
-    id: ac-directorio
-    attributes:
-      label: 👥 Directorio y Organigrama (3)
-      options:
-        - label: "18. El buscador del directorio filtra por nombre/puesto/área (servidor) y en móvil va a todo el ancho arriba; tarjetas/lista y la ficha lateral abren correctamente"
-        - label: "19. El directorio muestra los colaboradores activos reales (company_id=1) con foto, puesto y área; exportar CSV e imprimir funcionan"
-        - label: "20. El organigrama agrupa por nivel jerárquico, se reacomoda en móvil sin desbordes y al tocar una persona lleva a su ficha del directorio"
-
-  - type: checkboxes
-    id: ac-areas
-    attributes:
-      label: 🏢 Áreas / Departamentos (2)
-      options:
-        - label: "21. La lista de áreas y el detalle (avisos/recursos + equipo) cargan; publicar/editar/borrar avisos requiere permiso del área; subir archivo de área exige Coordinador+ (un colaborador recibe 403) (F4)"
-        - label: "22. En móvil el detalle del área NO se corre a la derecha (grid a 1 columna) y el botón \"Nueva publicación\" queda a lo ancho debajo de los datos del área"
-
-  - type: checkboxes
-    id: ac-cumpleanos
-    attributes:
-      label: 🎂 Cumpleaños (1)
-      options:
-        - label: "23. Del mes / Próximos / Aniversarios cargan; el selector de mes (navegador a lo ancho) y las pestañas (2×2) se ven bien en móvil; \"Felicitar\" funciona y persiste"
-
+        - label: "12. Directorio: el buscador filtra por nombre, puesto o area (a lo ancho en movil); muestra activos reales con foto; exportar CSV, imprimir y la ficha lateral funcionan"
+        - label: "13. Organigrama se reacomoda en movil sin desbordes; Areas: detalle (avisos y equipo), subir archivo exige Coordinador o superior (colaborador recibe 403, F4) y el boton queda a lo ancho"
+        - label: "14. Cumpleanos: del mes, proximos y aniversarios cargan; el selector de mes y las pestanas se ven bien en movil; felicitar funciona"
   - type: checkboxes
     id: ac-participacion
     attributes:
-      label: 📊 Encuestas y Evaluaciones (4)
+      label: "Encuestas, Evaluaciones, Quejas y Sugerencias (4)"
       options:
-        - label: "24. Crear encuesta (ventana flotante, 2 pasos): título, fecha de cierre, resultados públicos/anónima y \"dirigida a\" (roles/áreas); responder y ver resultados funcionan según permisos; en móvil el modal no desborda y \"Cancelar\" se oculta"
-        - label: "25. Al agregar una encuesta la tarjeta NO se sale a la derecha y los filtros Todas/Pendientes/Abiertas/Cerradas caben (cuadrícula 2×2)"
-        - label: "26. Crear evaluación (ventana flotante por pasos): datos, formato/criterios y personas; adjuntar archivo de evaluación y enviar el archivo contestado funcionan; el flujo 360° avanza a la siguiente pendiente"
-        - label: "27. En móvil el stepper de evaluación muestra UN paso a la vez (Datos/Formato/Personas) y las tarjetas y filtros no desbordan"
-
-  - type: checkboxes
-    id: ac-buzon
-    attributes:
-      label: 📮 Quejas y Sugerencias (3)
-      options:
-        - label: "28. Enviar una queja (anónima o identificada) con evidencia funciona; solo RH/Gerencia la ve; el seguimiento (hilo + historial) y el cambio de estado/prioridad operan"
-        - label: "29. Enviar y votar sugerencias funciona; el moderador cambia el estado; en móvil el pie de cada tarjeta se apila ordenado (estado / acciones) y el modal no desborda"
-        - label: "30. En ambas: encabezado apilado con CTA a lo ancho, stats a 1 columna y grid de tarjetas a 1 columna (no se salen a la derecha al agregar un registro)"
-
+        - label: "15. Encuestas: crear (2 pasos), responder y ver resultados segun permisos; en movil el modal no desborda y las tarjetas no se salen al agregar"
+        - label: "16. Evaluaciones: crear por pasos (en movil el stepper muestra un paso a la vez), adjuntar y enviar el archivo contestado, y el flujo 360 avanza a la siguiente pendiente"
+        - label: "17. Quejas: enviar (anonima o identificada) con evidencia; solo RH y Gerencia la ven; seguimiento (hilo e historial) y cambio de estado/prioridad funcionan"
+        - label: "18. Sugerencias: enviar y votar, moderar estado; en movil el pie de la tarjeta se apila ordenado y el header apila con el boton a lo ancho"
   - type: checkboxes
     id: ac-documentos
     attributes:
-      label: 📄 Políticas · Reglamento · Convenios · Identidad (4)
+      label: "Politicas, Reglamento, Convenios e Identidad (4)"
       options:
-        - label: "31. Políticas: crear/editar con contenido, categoría, visibilidad (rol/área/personas) y adjuntos; el acuse de lectura y el historial de versiones respetan la visibilidad — un usuario SIN acceso recibe 403 en detalle, revisiones, acuse y adjuntos (F2)"
-        - label: "32. Reglamento: el visor arma el índice por artículos numerados; en móvil el índice va ARRIBA (tarjeta), luego los artículos, las acciones y el Cumplimiento al final; crear/editar funciona"
-        - label: "33. Convenios: tarjetas (destacado, beneficio, vigencia, contacto, enlace, logo) y visor; en móvil el título cabe en una línea y el modal de edición no se amontona"
-        - label: "34. Identidad: misión/visión/valores/objetivos/historia/multimedia se ven; el modal \"Editar identidad\" en móvil no amontona los repetidores (Valores/Historia/Multimedia) y el logo/hero ajusta"
-
+        - label: "19. Politicas: crear/editar con visibilidad (rol, area, personas) y adjuntos; el detalle, el historial de versiones, el acuse y los adjuntos respetan la visibilidad (403 para quien no la puede ver, F2)"
+        - label: "20. Reglamento: el visor arma el indice por articulos numerados; en movil el indice va arriba (tarjeta), luego los articulos, las acciones y el cumplimiento"
+        - label: "21. Convenios: tarjetas (destacado, beneficio, vigencia, contacto, logo) y visor; en movil el titulo cabe en una linea y el modal de edicion no se amontona"
+        - label: "22. Identidad: mision, vision, valores, objetivos, historia y multimedia se ven; el modal Editar no amontona los repetidores en movil"
   - type: checkboxes
     id: ac-aprendizaje
     attributes:
-      label: 🎓 Recursos · Cursos · Guía Intranet (3)
+      label: "Recursos, Cursos, Guia y Primeros pasos (3)"
       options:
-        - label: "35. Recursos: en móvil el buscador queda con SOLO el ícono de filtro a la derecha; tocar \"Categorías\" abre el panel justo debajo y el botón se resalta; artículos/FAQ/plantillas y adjuntos funcionan"
-        - label: "36. Cursos: catálogo, portada/video, material adjunto, \"marcar completado\" y barra de progreso; header y modal correctos en móvil; los cursos de \"Inducción\" viven en la Guía (no aparecen en Cursos)"
-        - label: "37. Guía Intranet: el temario por módulos es acordeón en móvil (plegar/expandir cada categoría), el contenido enriquecido se ve bien y el progreso de inducción avanza"
-
+        - label: "23. Recursos: en movil el buscador queda con solo el icono de filtro a la derecha; tocar Categorias abre el panel justo debajo y resalta el boton; articulos, FAQ y plantillas funcionan"
+        - label: "24. Cursos: catalogo, material adjunto, marcar completado y progreso; Guia Intranet: el temario por modulos es acordeon en movil (plegar y expandir)"
+        - label: "25. Mis primeros pasos muestra el progreso y cada paso lleva a su seccion"
   - type: checkboxes
     id: ac-admin
     attributes:
-      label: 🛠️ Administración (super admin) (3)
+      label: "Administracion y Notificaciones (2)"
       options:
-        - label: "38. La tabla de Usuarios carga TODOS los registros; buscar/filtrar, cambiar rol, activar/desactivar, restablecer contraseña, acciones masivas y crear usuario nuevo funcionan"
-        - label: "39. En móvil la tabla de usuarios se ve como TARJETAS apiladas (nombre, correo, estado, rol, acciones) sin scroll horizontal; en escritorio sigue siendo tabla intacta"
-        - label: "40. Sincronización con Odoo, distribución por rol, analítica y bitácora de auditoría cargan; si una carga falla muestra un aviso con \"Reintentar\" (no queda en blanco silencioso)"
-
-  - type: checkboxes
-    id: ac-extra
-    attributes:
-      label: 🚀 Mis primeros pasos + 🔔 Notificaciones (1)
-      options:
-        - label: "41. \"Mis primeros pasos\" muestra el progreso y cada paso lleva a su sección; la campana muestra las notificaciones que corresponden al rol (super admin ve TODO; regalos/quejas/sugerencias van SOLO a RH por puesto) y en móvil el panel abre a lo ancho bajo el header"
-
+        - label: "26. Administracion: la tabla de usuarios carga (crear, cambiar rol, activar/desactivar, reset de contrasena, acciones masivas); en movil se ve como tarjetas apiladas; sync Odoo, analitica y auditoria cargan y avisan si algo falla"
+        - label: "27. Notificaciones (campana): por rol (super admin ve todo; regalos, quejas y sugerencias solo a RH por puesto); en movil el panel abre a lo ancho bajo el header"
   - type: checkboxes
     id: ac-seguridad
     attributes:
-      label: 🔒 Seguridad — fixes F1–F5 (4)
+      label: "Seguridad (fixes F1 a F5) (3)"
       options:
-        - label: "42. (F1) GET /docs/policy_1.pdf (nombre secuencial) devuelve 404; los PDF de políticas usan nombre aleatorio no enumerable → no se puede descargar por adivinanza el PDF de una política restringida"
-        - label: "43. (F2) El historial /policies/{id}/revisions, el acuse y la lista de adjuntos de una política respetan la visibilidad: 403 para quien NO puede ver la política; 200 para quien sí"
-        - label: "44. (F4) Subir un archivo .svg devuelve 400; departments/upload con un colaborador devuelve 403; POST news/{id}/view sobre una noticia no publicada devuelve 404"
-        - label: "45. (F3/F5) `pip-audit` (backend) y `npm audit --omit=dev` (frontend) reportan 0 vulnerabilidades y la app funciona igual tras el upgrade; el refresh corto (7 días) no desloguea a usuarios activos"
-
-  # ─── 3. Resultado global ────────────────────────────────────────────
+        - label: "28. (F1) GET /docs/policy_1.pdf devuelve 404; los PDF de politicas usan nombre aleatorio no enumerable (no se descarga por adivinanza el PDF de una politica restringida)"
+        - label: "29. (F2 y F4) Historial, acuse y adjuntos de una politica restringida dan 403 sin acceso; subir un .svg da 400; POST news/{id}/view en borrador da 404; departments/upload con colaborador da 403"
+        - label: "30. (F3 y F5) pip-audit (backend) y npm audit --omit=dev (frontend) en 0 vulnerabilidades y la app funciona igual tras el upgrade; el refresh corto (7 dias) no desloguea a usuarios activos"
   - type: dropdown
     id: result
     attributes:
-      label: 🎯 Resultado global del QA
+      label: "Resultado global del QA"
       options:
-        - "✅ Aprobado para producción"
-        - "⚠️ Aprobado con observaciones menores (anotar abajo)"
-        - "❌ Rechazado — requiere correcciones (anotar abajo)"
+        - "Aprobado para produccion"
+        - "Aprobado con observaciones menores (anotar abajo)"
+        - "Rechazado, requiere correcciones (anotar abajo)"
     validations:
       required: true
-
   - type: textarea
     id: findings
     attributes:
-      label: 🔍 Hallazgos / observaciones
-      description: |
-        Para cada criterio que NO pasó, describe:
-        - Número del check y qué probaste (rol + dispositivo/ancho)
-        - Qué esperabas
-        - Qué pasó realmente
-        - Pasos para reproducir
-        Si encuentras bugs grandes, abre issues SEPARADOS (uno por bug) y referencia desde acá.
-      placeholder: |
-        Ejemplo:
-        - [#5 responsive] En /reconocimientos la tarjeta se corre a la derecha en iPhone (~390px). Reproducible en Safari iOS.
-        - [#43 F2] Un colaborador puede abrir el historial de una política de RH (esperaba 403). Issue: #12
+      label: "Hallazgos / observaciones"
+      description: "Para cada criterio que NO paso: numero del check, rol y dispositivo, que esperabas, que paso y pasos para reproducir. Si hay bugs grandes, abre issues separados y referencialos."
+      placeholder: "- [#5 responsive] En reconocimientos la tarjeta se corre a la derecha en iPhone."
       render: markdown
     validations:
       required: false
-
   - type: input
     id: time-spent
     attributes:
-      label: ⏱️ Tiempo aproximado del QA
+      label: "Tiempo aproximado del QA"
       placeholder: "3h"
     validations:
       required: false
-
-  - type: markdown
-    attributes:
-      value: |
-        ---
-        *Probar SIEMPRE con datos y cuentas de PRUEBA; Odoo en la instancia de DESARROLLO. Revisar en móvil (~375px) y desktop. Ningún cambio va directo a producción sin pasar por el VPS de pruebas.*
