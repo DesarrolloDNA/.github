@@ -1,0 +1,192 @@
+name: 🧪 QA Review — Genli Pharma (tienda en línea)
+description: "Revisión de QA del e-commerce Genli Pharma (Next.js + FastAPI + PostgreSQL + Stripe + Odoo + bot Genli con RAG/Gemini). 30 criterios específicos de este proyecto — NO usar en otros repos."
+title: "[QA][genli] <feature/sprint que estás probando>"
+labels:
+  - qa
+body:
+  # ─── 1. Contexto de la prueba ──────────────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## 📋 Contexto de esta sesión de QA
+        Llena estos campos antes de empezar. Si algo no aplica, escribe N/A.
+        Antes de marcar checks, **abre la web y reproduce cada flujo en orden** — no copies de un QA anterior.
+        Usa SIEMPRE datos de prueba (tarjeta Stripe `4242 4242 4242 4242`, cuentas de QA) y verifica Odoo en la instancia de **DESARROLLO**.
+        Arquitectura: frontend Next (puerto **3000**) → backend FastAPI (puerto **8000**, se arranca con `python run.py`) → Postgres (schema `public`) + Odoo (precio `list_price`, por SKU prefijo **`PTGLP`**) + Stripe + KeyVault/Gemini para el bot **Genli**.
+        Reglas de negocio: la compra **requiere cuenta** (NO hay checkout de invitado); productos de **prescripción** (hormona de crecimiento / somatropina) con **cadena de frío** 2–8 °C; verificación de autenticidad por **folios** (código único, hasta 3 activaciones).
+
+  - type: input
+    id: branch
+    attributes:
+      label: Rama probada
+      description: ¿Sobre qué rama corres el QA?
+      placeholder: "dev / main"
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit SHA (primeros 7 chars)
+      description: Para reproducir exactamente lo que probaste
+      placeholder: "a1b2c3d"
+    validations:
+      required: true
+
+  - type: input
+    id: env-url
+    attributes:
+      label: URL del entorno de pruebas
+      placeholder: "http://localhost:3000 · http://192.168.1.x:3000 · URL del VPS de pruebas"
+    validations:
+      required: false
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser / dispositivo + versión
+      placeholder: "Chrome 142 (desktop), Safari iOS 18 (móvil)"
+    validations:
+      required: false
+
+  # ─── 2. Acceptance criteria (30 checks) ─────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## ✅ Acceptance criteria — 30 puntos. Lo que sí rompe, rompe el negocio
+
+  - type: checkboxes
+    id: ac-auth
+    attributes:
+      label: 🔐 Autenticación y cuenta (4)
+      options:
+        - label: "1. Login con credenciales válidas entra y redirige; con inválidas muestra error genérico (sin filtrar si el correo existe) y bloquea la cuenta tras varios intentos fallidos (lockout temporal)"
+        - label: "2. Registro crea la cuenta (contraseña mínimo 8 caracteres, una mayúscula, un número y un carácter especial) y envía correo de verificación; NO se puede iniciar sesión hasta verificar (login sin verificar avisa \"debes verificar tu correo\")"
+        - label: "3. El enlace del correo abre /cuenta/verificado, activa la cuenta e inicia sesión automáticamente; reenviar verificación funciona; también se puede registrar/iniciar sesión con Google (OAuth)"
+        - label: "4. Recuperar contraseña (/recuperar) completa el flujo con código por correo; logout invalida el JWT (token_version) — el token viejo deja de servir y /api/auth/me responde 401"
+
+  - type: checkboxes
+    id: ac-catalogo
+    attributes:
+      label: 🛍️ Catálogo y producto (3)
+      options:
+        - label: "5. La tienda (/tienda) carga los productos con precio y stock REALES de Odoo (precio list_price, por SKU prefijo PTGLP); ningún producto en $0; un SKU con stock 0 en Odoo se refleja como agotado (sync al arranque y periódico)"
+        - label: "6. El detalle (/producto/[slug]) abre con galería e info; las presentaciones de Gentropin (80 IU / 210 IU) actualizan precio/imagen; el HOME muestra SOLO los 4 productos base (no se cuela ningún paquete)"
+        - label: "7. Las imágenes cargan desde /images/** (sin imágenes rotas) y \"Agregar al carrito\" funciona y abre/actualiza el carrito"
+
+  - type: checkboxes
+    id: ac-carrito
+    attributes:
+      label: 🛒 Carrito y envío (2)
+      options:
+        - label: "8. El drawer del carrito abre desde el navbar en cualquier página; cambiar cantidad / eliminar / vaciar recalcula el subtotal al instante; el carrito persiste al recargar la página (localStorage)"
+        - label: "9. Envío: GRATIS desde $1,250 MXN, $200 en compras menores (y los paquetes con envío gratis configurado); el total mostrado en el front cuadra EXACTO con el que recalcula el backend (server-side)"
+
+  - type: checkboxes
+    id: ac-checkout
+    attributes:
+      label: 💳 Checkout y pago — requiere cuenta (4)
+      options:
+        - label: "10. NO hay compra como invitado: sin sesión, finalizar compra / /checkout redirige a login o registro (y el bot Genli tampoco debe decir que se permite comprar sin cuenta)"
+        - label: "11. Estando logueado, el checkout PRELLENA email y nombre; el teléfono (10 dígitos) viene precargado del registro y se puede elegir una dirección guardada para autocompletar; el selector de estado (con búsqueda) funciona"
+        - label: "12. El precio y el envío se recalculan SERVER-SIDE desde la BD/Odoo (por SKU): un carrito manipulado en el cliente NO puede cambiar el monto a cobrar"
+        - label: "13. Pago con tarjeta de PRUEBA (4242…) vía Stripe regresa a /checkout/success, confirma el pago, muestra el número de pedido (GL-XXXXXXXX) y limpia el carrito; cancelar o una tarjeta rechazada va a /checkout/failure con el carrito intacto y SIN cargo (permite reintentar). Solo hay pago con tarjeta (Stripe)"
+
+  - type: checkboxes
+    id: ac-pedidos-odoo
+    attributes:
+      label: 📦 Pedidos y sincronización con Odoo (4)
+      options:
+        - label: "14. El pedido pagado queda en la BD propia (orders / order_items) con número GL-XXXXXXXX, estado \"pagado\" y los productos/presentaciones/precios correctos (releídos de la BD, no del cliente)"
+        - label: "15. El pedido pagado se empuja a Odoo como sale.order en BORRADOR con contexto MENUDEO (company 1 = DNA Evoluciona, branch 2, team 5, unidad de negocio 4, almacén ODOO_WAREHOUSE_ID) y dirección de ENTREGA por pedido (partner_shipping_id); el total cuadra EXACTO, sin centavos de diferencia"
+        - label: "16. /cuenta/pedidos lista los pedidos del usuario (desde /api/orders) con auto-actualización y estado correcto; los filtros (Hoy / Últimos 7 días / Último mes / Todos), el dropdown de estatus y el buscador por número de pedido funcionan"
+        - label: "17. Tracking: al cargar la guía en Odoo, el pedido pasa a \"ENVIADO/EN CAMINO\" y la barra de 4 pasos (Pedido → Pagado → Confirmado → Enviado) muestra el avance con la(s) guía(s), su paquetería y enlace de rastreo"
+
+  - type: checkboxes
+    id: ac-paquetes
+    attributes:
+      label: 🎁 Paquetes / kits (2)
+      options:
+        - label: "18. Un paquete se crea en /admin/paquetes como producto (is_package) compuesto por varios productos + cantidades, con precio manual e imagen subida a public/images/paquetes; el toggle \"En tienda / Oculto\" publica/oculta el paquete y el carrusel lista los creados"
+        - label: "19. En tienda/detalle el paquete muestra el badge \"Kit\", el % de descuento vs. el valor del contenido y la leyenda; al pagarlo se manda a Odoo como sus productos componentes (líneas individuales) con el neto = lo pagado por el paquete"
+
+  - type: checkboxes
+    id: ac-cuenta
+    attributes:
+      label: 👤 Mi cuenta (3)
+      options:
+        - label: "20. Perfil: muestra nombre, correo y teléfono REALES del backend; el correo está bloqueado; guardar cambios persiste (PUT /api/auth/me) y se refleja; el avatar subido aparece en navbar/sidebar"
+        - label: "21. Direcciones: la dirección del último pedido aparece guardada; \"Descargar comprobante (PDF)\" (solo en pedidos pagados) genera el PDF (jspdf) con el logo de la marca, productos, totales, dirección y método de pago, aclarando que NO es factura fiscal (CFDI)"
+        - label: "22. Dashboard (/cuenta): el bento muestra datos reales (producto más comprado, número de pedidos, estatus del último pedido, total pagado y dirección principal) y todos los botones/enlaces del panel y de la sidebar (navy) funcionan, incluida la versión móvil desplegable"
+
+  - type: checkboxes
+    id: ac-folios
+    attributes:
+      label: 🔎 Verificación de producto — folios (3)
+      options:
+        - label: "23. Admin (/admin/verificacion) importa el Excel de folios → inserción masiva sin duplicar los que ya existen, y muestra el resumen (recibidos / insertados / duplicados)"
+        - label: "24. Verificación pública (/verificar) y desde la cuenta (/cuenta/verificar), ambas con loader: un código válido muestra \"auténtico\" con activación X/3, restantes y fecha; a la 4ª activación da \"código ya utilizado\" (tope 3); un código inexistente da \"no encontrado\""
+        - label: "25. El QR / enlace con ?code= precarga y verifica solo en /verificar; el código se normaliza (mayúsculas / sin espacios) y cada activación registra la fecha del día"
+
+  - type: checkboxes
+    id: ac-bot
+    attributes:
+      label: 🤖 Asistente Genli (RAG) (3)
+      options:
+        - label: "26. Genli responde con información REAL del sitio (productos, precios, envíos, pagos, marca) recuperada por RAG; no inventa precios/ingredientes/promociones; NUNCA expone los estatus internos de la BD (pending/paid/confirmed/…), solo describe la etapa en lenguaje natural; y NO dice que se permite comprar como invitado"
+        - label: "27. Al sugerir productos muestra un CARRUSEL de cards de TAMAÑO FIJO con precio en vivo; las cards aparecen UNA sola vez al terminar la respuesta (sin parpadeo durante el streaming); el bot NO se abre solo al iniciar sesión y se cierra con la X, clic fuera o Escape"
+        - label: "28. NO da dosis ni consejo médico (productos de prescripción — deriva a un profesional de la salud) y maneja insultos al bot con una advertencia firme y respetuosa, sin insultar de vuelta ni procesar el insulto como consulta normal"
+
+  - type: checkboxes
+    id: ac-seguridad
+    attributes:
+      label: 🛡️ Seguridad, administración, correos y móvil (2)
+      options:
+        - label: "29. Rutas privadas (/cuenta/*, /admin/*, checkout) redirigen a login sin sesión; /admin solo es accesible con is_admin; un usuario NO ve pedidos/direcciones/folios de otro; las respuestas no exponen tokens/llaves/PII ni stack traces. Admin Usuarios cuenta las cuentas registradas y muestra pedidos + total gastado (status != pending) e ingresos totales; no puedes quitarte tu propio admin"
+        - label: "30. Llegan los correos branded (verificación de cuenta, código de recuperación, pedido recibido, pago confirmado) vía el SMTP propio del backend; blog y páginas legales cargan; el SEO está presente (sitemap, robots, JSON-LD) y las reseñas NO se marcan como reviews (sin aggregateRating); la web completa funciona en móvil (tienda, drawer del carrito, checkout, panel, bot + carrusel, verificar) sin overflow ni errores rojos en consola"
+
+  # ─── 3. Resultado global ────────────────────────────────────────────
+  - type: dropdown
+    id: result
+    attributes:
+      label: 🎯 Resultado global del QA
+      options:
+        - "✅ Aprobado para producción"
+        - "⚠️ Aprobado con observaciones menores (anotar abajo)"
+        - "❌ Rechazado — requiere correcciones (anotar abajo)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: findings
+    attributes:
+      label: 🔍 Hallazgos / observaciones
+      description: |
+        Para cada criterio que NO pasó, describe:
+        - Número del check y qué probaste
+        - Qué esperabas
+        - Qué pasó realmente
+        - Pasos para reproducir
+        Si encuentras bugs grandes, abre issues SEPARADOS (uno por bug) y referencia desde acá.
+      placeholder: |
+        Ejemplo:
+        - [#7 catálogo] Las imágenes de producto salen rotas (faltan archivos en public/images). Reproducible en Chrome. Issue: #42
+        - [#15 odoo] La cotización quedó $0.01 abajo del pedido con envío gratis.
+        - [#26 bot] El bot dijo "tu pedido está en estado paid" en vez de describir la etapa.
+      render: markdown
+    validations:
+      required: false
+
+  - type: input
+    id: time-spent
+    attributes:
+      label: ⏱️ Tiempo aproximado del QA
+      placeholder: "2h"
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        *Recuerda probar con datos de PRUEBA (Stripe test `4242 4242 4242 4242`, cuentas de QA). No uses tarjetas reales ni datos personales reales en el ambiente de pruebas, y verifica Odoo en la instancia de DESARROLLO. Ningún cambio va directo a producción sin pasar por el VPS de pruebas. Pendientes de prod conocidos: definir `SECRET_KEY` real y `STRIPE_WEBHOOK_SECRET`, subir las imágenes a `public/images/`, y exponer los servicios por dominio/HTTPS en lugar de IP de LAN.*

@@ -1,0 +1,257 @@
+name: 🧪 QA Review — Frontend Nóminas (SPA) (solo aplica al repo frontend/nominas)
+description: "QA del frontend de Nóminas (React SPA): config runtime, auth SSO + fallback local, aislamiento multi-empresa, permisos por módulo, CRUD, tema light/dark y UI/UX. Se prueba en el NAVEGADOR."
+title: "[QA][nominas-front] Release <vX.Y.Z>"
+labels:
+  - qa
+  - frontend
+body:
+  # ─── 1. Contexto de la prueba ──────────────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## 📋 Contexto de esta sesión de QA
+        Llena estos campos antes de empezar. Si algo no aplica, escribe N/A.
+        Convención: marcar cada item SOLO si la verificación fue ejecutada en el navegador y aprobada. No marcar por inspección de código.
+
+  - type: input
+    id: tag-sha
+    attributes:
+      label: Tag / SHA del release
+      description: Versión candidata + SHA corto (imagen/bundle) para reproducir exactamente lo que probaste
+      placeholder: "v1.4.2 / a1b2c3d"
+    validations:
+      required: true
+
+  - type: input
+    id: env-host
+    attributes:
+      label: Host QA
+      description: "Ambiente probado (docker-compose.qa.yml). URL del front de pruebas."
+      placeholder: "https://qa-nominas.dnapp.com.mx/"
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Navegador / versión
+      placeholder: "Chrome 139 / Firefox 140 / Edge 139"
+    validations:
+      required: true
+
+  - type: input
+    id: responsable
+    attributes:
+      label: Responsable QA
+      placeholder: "@usuario-github"
+    validations:
+      required: true
+
+  - type: input
+    id: fecha
+    attributes:
+      label: Fecha de ejecución
+      placeholder: "YYYY-MM-DD"
+    validations:
+      required: true
+
+  - type: input
+    id: pr-origen
+    attributes:
+      label: PR / Issue origen
+      placeholder: "#123"
+    validations:
+      required: false
+
+  # ─── 2. Usuarios / datos de prueba ─────────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## 🔑 Usuarios y datos de prueba
+        Crea/identifica estos usuarios en el panel. Guarda contraseñas **FUERA del repo**.
+
+        - `<USER_1EMP>`: usuario con UNA sola empresa permitida (valida auto-select y selector oculto)
+        - `<USER_MULTI>`: usuario con VARIAS empresas permitidas (valida selector visible)
+        - `<USER_RO>`: usuario con solo permiso `ver` en algún módulo (sin crear/editar/eliminar)
+        - `<USER_ADMIN>`: usuario con `admin` (comodín) y acceso a `/configuracion`
+        - `<USER_SIN_ACCESO>`: usuario válido en el panel pero sin acceso a la app nómina (estado de acceso)
+
+  # ─── 3. Acceptance criteria críticos ────────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## ✅ Acceptance criteria — si rompe, NO se promueve a producción
+
+  - type: checkboxes
+    id: ac-prereqs
+    attributes:
+      label: 🧱 Pre-requisitos del ambiente (config runtime)
+      options:
+        - label: "Abrir `/config.js` en el navegador muestra los valores REALES (`window.__ENV__` con `VITE_API_URL`, `VITE_PANEL_URL`, etc.), NO `{}`"
+        - label: "La SPA carga sin errores en la consola del navegador (sin 404 de assets, sin excepciones de React al primer render)"
+        - label: "Backend QA alcanzable: las requests parten de `VITE_API_URL` con header `X-API-Key` y `?empresa=` (verificar en pestaña Network)"
+
+  - type: checkboxes
+    id: ac-auth
+    attributes:
+      label: 🪪 Autenticación (SSO-first + fallback local)
+      options:
+        - label: "Con sesión SSO válida en el panel → al entrar a la app carga directo (sin pedir login) y `user` queda seteado"
+        - label: "Sin cookie del panel / panel inalcanzable → se muestra el login LOCAL (estado `panelStatus`, no pantalla en blanco)"
+        - label: "Login local con credenciales válidas → entra al dashboard; con credenciales inválidas → toast de error y permanece en /login"
+        - label: "Logout → limpia sesión, redirige a /login y el botón Atrás del navegador NO reingresa a rutas privadas"
+        - label: "Sesión expirada (evento `auth:expired` / refresh fallido) → redirige a login sin loop de requests"
+
+  - type: checkboxes
+    id: ac-access
+    attributes:
+      label: 🚧 Estados de acceso (/access/<state>)
+      options:
+        - label: "`<USER_SIN_ACCESO>` → cae en /access/<state> correcto (no_access / pending / rejected / suspended) con su `AccessCard`"
+        - label: "`AccessCard` muestra las acciones contextuales correctas (reintentar / solicitar acceso / usar otra cuenta / contraseña local)"
+        - label: "Navegar directo a `/access/<state>` sin estado válido → `RequireAccessState` redirige (no se queda en la card huérfana)"
+
+  - type: checkboxes
+    id: ac-empresa
+    attributes:
+      label: 🏢 Multi-empresa (UX del selector)
+      options:
+        - label: "`<USER_1EMP>` → el selector de empresa NO es visible y la única empresa queda auto-seleccionada"
+        - label: "`<USER_MULTI>` → selector visible; al cambiar de empresa la data de la pantalla actual se recarga para la nueva empresa"
+        - label: "La empresa seleccionada persiste en `localStorage` tras recargar (F5) y se mantiene entre rutas"
+        - label: "Sin empresa seleccionada las escrituras se bloquean (no se dispara POST/PUT/DELETE sin `empresa`); el front no rompe"
+
+  - type: checkboxes
+    id: ac-permisos
+    attributes:
+      label: 🔐 Permisos por módulo (ProtectedRoute)
+      options:
+        - label: "`<USER_RO>` sin permiso `ver` en un módulo → la ruta redirige a /dashboard (no monta la página)"
+        - label: "Botones Crear/Editar/Eliminar quedan ocultos o deshabilitados según `crear`/`editar`/`eliminar` del módulo"
+        - label: "`<USER_ADMIN>` (comodín `admin`) accede a todos los módulos y a `/configuracion`"
+        - label: "Usuario sin `admin` no puede entrar a `/configuracion` (redirige) aunque escriba la URL a mano"
+
+  - type: checkboxes
+    id: ac-nav
+    attributes:
+      label: 🧭 Navegación y rutas
+      options:
+        - label: "El nav muestra solo los módulos con permiso; los enlaces navegan a la página correcta"
+        - label: "Rutas legacy redirigen: `/prestaciones` → `/prestamos` y `/cuentas-prestaciones` → `/conceptos`"
+        - label: "URL inexistente → componente `NotFound` (no pantalla en blanco)"
+
+  - type: checkboxes
+    id: ac-crud
+    attributes:
+      label: 📝 CRUD funcional por página
+      options:
+        - label: "Trabajadores: listar, crear, editar (cambio de sueldo EXIGE fecha de vigencia), y eliminar (uno y bulk) funcionan con toast de resultado"
+        - label: "Nóminas: navegar periodos en el sidebar, ver tabs/desglose y ejecutar regenerar/procesar/cerrar/desbloquear refrescan la vista"
+        - label: "Préstamos: crear/editar/eliminar reflejan el cambio en la lista tras la acción"
+        - label: "Conceptos: CRUD completo opera sin error y respeta permisos"
+        - label: "Fondo de ahorro y PTU: alta/edición de periodo, resumen y agrupación por departamento se cargan correctamente"
+        - label: "Vacaciones: solicitudes y pagos de rezagadas se listan/operan según permisos"
+
+  - type: checkboxes
+    id: ac-tema
+    attributes:
+      label: 🎨 Tema light/dark
+      options:
+        - label: "El toggle del nav alterna toda la UI light↔dark sin colores 'rotos' (textos legibles, sin fondos hardcodeados en las pantallas tocadas)"
+        - label: "La preferencia de tema persiste en `localStorage` tras recargar (F5)"
+
+  - type: checkboxes
+    id: ac-uiux
+    attributes:
+      label: 🧩 UI/UX y validación de formularios
+      options:
+        - label: "Toasts (Sonner, top-left) aparecen en cada acción y muestran el `message`/`errores` que devuelve el backend"
+        - label: "Tooltips (`data-tooltip`) se muestran sobre los botones, con saltos de línea cuando aplica"
+        - label: "Paginación: cambiar de página y de filas-por-página actualiza la lista correctamente"
+        - label: "Dropdowns dentro de tablas/sidebar/modales con scroll usan `floating` (no se cortan por overflow ni quedan detrás del contenido)"
+        - label: "Validación Zod: formularios muestran errores inline (p.ej. teléfono MX inválido, sueldo sin fecha de vigencia) y bloquean el submit"
+        - label: "Búsqueda/filtros (search) filtran ignorando acentos/mayúsculas (`normalizeText`)"
+
+  - type: checkboxes
+    id: ac-robustez
+    attributes:
+      label: 🛡️ Robustez y estados de carga
+      options:
+        - label: "`ErrorBoundary` captura un error de render sin dejar pantalla en blanco (muestra fallback)"
+        - label: "Durante los fetch se muestra `LoadingState`/spinner y no se renderiza data parcial ni 'undefined'"
+        - label: "Un 403 del backend (empresa fuera de scope / sin permiso) se maneja con toast/redirección, NO con crash"
+
+  - type: checkboxes
+    id: ac-evidencia
+    attributes:
+      label: 📎 Evidencia a adjuntar al issue
+      options:
+        - label: "Screenshots de las pantallas clave probadas (login, dashboard, una página CRUD, light y dark)"
+        - label: "Captura de `/config.js` con valores reales + lista de usuarios/empresas QA usados (sin contraseñas)"
+
+  # ─── 4. Criterios de rollback ───────────────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## 🛑 Criterios de rollback / NO promover a producción
+        Marca cada criterio que **SÍ se cumplió** (todo OK). Si CUALQUIERA queda sin marcar, **NO se promueve a `:latest`**: abre issue de bug bloqueante referenciando este checklist y revierte el deploy de QA al tag previo.
+
+  - type: checkboxes
+    id: rollback
+    attributes:
+      label: ✅ Confirmación de NO-violación
+      options:
+        - label: "NO hay acceso indebido por UI: ningún usuario alcanzó un módulo/acción sin el permiso requerido"
+        - label: "NO hay fuga cross-empresa en la UI: ningún usuario vio datos de empresas fuera de las suyas"
+        - label: "Config runtime íntegra: `/config.js` no quedó en `{}` ni horneado con valores de otro ambiente"
+        - label: "Sin pantallas en blanco: ningún flujo (auth, acceso, CRUD) dejó al usuario sin UI ni con crash no capturado"
+
+  # ─── 5. Resultado global ────────────────────────────────────────────
+  - type: dropdown
+    id: result
+    attributes:
+      label: 🎯 Resultado global del QA
+      options:
+        - "✅ Aprobado para promover a :latest"
+        - "⚠️ Aprobado con observaciones menores (anotar abajo)"
+        - "❌ Rechazado — requiere correcciones (anotar abajo)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: findings
+    attributes:
+      label: 🔍 Hallazgos / observaciones
+      description: |
+        Para cada criterio que NO pasó, describe: qué probaste, qué esperabas, qué pasó, y pasos para reproducir.
+        Si encuentras bugs grandes, abre issues SEPARADOS (uno por bug) y referéncialos acá.
+      placeholder: |
+        Ejemplo:
+        - [ac-permisos] <USER_RO> ve el botón Eliminar en Trabajadores pese a no tener permiso `eliminar`. Issue: #42
+        - [ac-empresa] al cambiar de empresa la tabla de Nóminas no se recarga (queda data de la empresa anterior)
+      render: markdown
+    validations:
+      required: false
+
+  # ─── 6. Aprobaciones ────────────────────────────────────────────────
+  - type: input
+    id: aprob-qa
+    attributes:
+      label: ✍️ Aprobación QA
+      placeholder: "@usuario — YYYY-MM-DD"
+    validations:
+      required: true
+
+  - type: input
+    id: aprob-tl
+    attributes:
+      label: ✍️ Aprobación Tech Lead
+      placeholder: "@usuario — YYYY-MM-DD"
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        *Promover a `:latest` solo después de tener ambas aprobaciones y resultado ✅.*

@@ -1,0 +1,228 @@
+name: 🧪 QA Review — Autoback Endpoints, Auth & Sync (solo aplica al repo autoback)
+description: "QA del backend autoback: auth doble en /api/, aislamiento por empresa (TODO-007), gate /auto/ y sync Odoo vía DATABACK. Solo aplica al repo autoback."
+title: "[QA][autoback] Release <vX.Y.Z>"
+labels:
+  - qa
+body:
+  # ─── 1. Contexto de la prueba ──────────────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## 📋 Contexto de esta sesión de QA
+        Llena estos campos antes de empezar. Si algo no aplica, escribe N/A.
+        Convención: marcar cada item SOLO si la verificación fue ejecutada y aprobada. No marcar por inspección de código.
+
+  - type: input
+    id: tag-sha
+    attributes:
+      label: Tag / SHA del release
+      description: Versión candidata + SHA corto para reproducir exactamente lo que probaste
+      placeholder: "v1.4.2 / a1b2c3d"
+    validations:
+      required: true
+
+  - type: input
+    id: env-host
+    attributes:
+      label: Host QA
+      description: "Ambiente probado (docker-compose.qa.yml). URL oficial de pruebas: https://testauto2.dnapp.com.mx/"
+      value: "https://testauto2.dnapp.com.mx/"
+    validations:
+      required: true
+
+  - type: input
+    id: responsable
+    attributes:
+      label: Responsable QA
+      placeholder: "@usuario-github"
+    validations:
+      required: true
+
+  - type: input
+    id: fecha
+    attributes:
+      label: Fecha de ejecución
+      placeholder: "YYYY-MM-DD"
+    validations:
+      required: true
+
+  - type: input
+    id: pr-origen
+    attributes:
+      label: PR / Issue origen
+      placeholder: "#123"
+    validations:
+      required: false
+
+  # ─── 2. Placeholders usados en los curl ─────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## 🔑 Placeholders
+        Los `curl` de abajo referencian estos placeholders. Crea las ApiKeys desde el admin (`/admin/`) y los usuarios desde el panel/admin. Guarda plaintext y contraseñas **FUERA del repo**.
+
+        - Host QA: **`testauto2.dnapp.com.mx`**
+        - `<DNA_PK_VALIDA>`: ApiKey activa (cualquier flag)
+        - `<DNA_PK_NO_SYNC>`: ApiKey activa con `puede_sincronizar=False`
+        - `<DNA_PK_SYNC_OK>`: ApiKey activa con `puede_sincronizar=True`
+        - `<DNA_PK_INACTIVA>`: ApiKey con `activo=False`
+        - `<USER_A>` / `<PASS_A>`: usuario con `empresas_permitidas` acotado (p.ej. solo empresa id=1)
+        - `<USER_TODAS>` / `<PASS_TODAS>`: usuario con todas las empresas permitidas
+
+  # ─── 3. Acceptance criteria críticos ────────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## ✅ Acceptance criteria — si rompe, NO se promueve a producción
+
+  - type: checkboxes
+    id: ac-prereqs
+    attributes:
+      label: 🧱 Pre-requisitos del ambiente
+      options:
+        - label: "`docker-compose -f docker-compose.qa.yml --env-file .env.qa ps` muestra el `web` y el `db` en estado `Up`"
+        - label: "`init-users.sh` ya corrió en la BD QA (los 4 usuarios Postgres existen) y la tabla `django_cache` existe (`createcachetable` ejecutado)"
+        - label: "DATABACK alcanzable: `DATABACK_API_BASE_URL` y `DATABACK_API_KEY` cargadas y respondiendo (un `/auto/5min/` regresa datos, no error de conexión)"
+        - label: "`python manage.py showmigrations` NO reporta migraciones sin aplicar en QA"
+        - label: "Variables `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` y (si aplica) `WAHA_BASE_URL` / `WAHA_API_KEY` / `WAHA_SESSION` cargadas"
+
+  - type: checkboxes
+    id: ac-apikey
+    attributes:
+      label: 🔐 ApiKeyMiddleware — capa de API Key
+      options:
+        - label: "Sin header → 401 'Header X-API-Key requerido' (curl -i https://testauto2.dnapp.com.mx/api/dna/empresas/)"
+        - label: "Key inexistente o `activo=False` → 403 'API Key invalida' (curl -i -H 'X-API-Key: <DNA_PK_INACTIVA>' https://testauto2.dnapp.com.mx/api/dna/empresas/)"
+        - label: "Ruta /admin/ NO exige X-API-Key → 200 o 302 (curl -i https://testauto2.dnapp.com.mx/admin/login/)"
+
+  - type: checkboxes
+    id: ac-jwt
+    attributes:
+      label: 🪪 Auth JWT en /api/ (cookie HttpOnly)
+      options:
+        - label: "Login válido (con X-API-Key) → 200 + Set-Cookie `access` (30 min) y `refresh` (30 días) HttpOnly (curl -i -H 'X-API-Key: <DNA_PK_VALIDA>' -d '{\"usuario\":\"<USER_A>\",\"password\":\"<PASS_A>\"}' -H 'Content-Type: application/json' https://testauto2.dnapp.com.mx/api/usuarios/login/)"
+        - label: "Credenciales inválidas → 401 (mismo curl con password incorrecta)"
+        - label: "`/api/usuarios/me/` sin cookie JWT → 401; con cookie válida → 200 (curl -b cookies.txt ...)"
+        - label: "Refresh rota el token y hace blacklist del viejo: reusar el `refresh` anterior → 401; `logout/` limpia cookies y blacklistea el refresh vigente"
+
+  - type: checkboxes
+    id: ac-empresa
+    attributes:
+      label: 🏢 Aislamiento por empresa (TODO-007)
+      options:
+        - label: "GET de listado con `<USER_A>` (scope acotado) devuelve SOLO datos de sus `empresas_permitidas` (curl -b cookies_A.txt https://testauto2.dnapp.com.mx/api/dna/trabajadores/ | jq '[.data[].empresa] | unique')"
+        - label: "GET `?empresa=<X>` con X fuera del scope de `<USER_A>` → 403 (curl -i -b cookies_A.txt '.../api/dna/empresas/?empresa=<X_FUERA>')"
+        - label: "POST/PUT con `empresa` fuera del scope en el body → 403 (no se crea/edita registro de otra empresa)"
+        - label: "Editar `empresas_permitidas` del usuario → `permissions_version` sube; tras `refresh/` el nuevo scope se refleja (antes no veía empresa X, después sí)"
+
+  - type: checkboxes
+    id: ac-auto-gate
+    attributes:
+      label: 🤖 Gate /auto/ — puede_sincronizar
+      options:
+        - label: "Key con `puede_sincronizar=False` → 403 'API Key sin permiso para sincronizar (/auto/)' (curl -i -X POST -H 'X-API-Key: <DNA_PK_NO_SYNC>' https://testauto2.dnapp.com.mx/auto/5min/)"
+        - label: "Key con `puede_sincronizar=True` → 200 (curl -i -X POST -H 'X-API-Key: <DNA_PK_SYNC_OK>' https://testauto2.dnapp.com.mx/auto/5min/)"
+
+  - type: checkboxes
+    id: ac-sync
+    attributes:
+      label: 🔄 Sincronización /auto/5min/ (Odoo vía DATABACK)
+      options:
+        - label: "`/auto/5min/` → 200 con conteos por entidad para los 8 catálogos (Empresas, Departamentos, Analíticas, Unidades, Puestos, Trabajadores, PlanesCuentas, Diarios) + refresh ZKTeco"
+        - label: "Forzar error (DATABACK inalcanzable) → respuesta con `errores: [...]` no vacío y `SyncLog.fecha` de la entidad NO avanza (verificar antes/después en /admin/ → SyncLog)"
+        - label: "Corrida exitosa → `SyncLog.fecha` SÍ avanza para las entidades sincronizadas (diff antes/después)"
+
+  - type: checkboxes
+    id: ac-diario
+    attributes:
+      label: 🗓️ Tareas /auto/diario/
+      options:
+        - label: "`/auto/diario/` → recálculo de vacaciones corre sin error (status ok en `data.vacaciones`)"
+        - label: "Costos Odoo se auto-omite salvo el 2º día hábil del mes (mensaje de skip en `data.costos`; ejecución real solo ese día)"
+        - label: "Housekeeping corre sin errores (status ok en `data.housekeeping`)"
+
+  - type: checkboxes
+    id: ac-notif
+    attributes:
+      label: 📣 Notificaciones
+      options:
+        - label: "Al forzar un error en `/auto/` → llega mensaje a Telegram (prefijo 🔴) en el chat configurado"
+        - label: "Alerta WAHA (vacaciones/aniversarios/dispersión) se envía cuando corresponde. N/A si `WAHA_SESSION` está vacío"
+
+  - type: checkboxes
+    id: ac-evidencia
+    attributes:
+      label: 📎 Evidencia a adjuntar al issue
+      options:
+        - label: "Output de `curl -i` de cada bloque (resumido) + screenshots clave"
+        - label: "Captura del mensaje de Telegram cuando se forzó error de sync"
+        - label: "Diff del SyncLog (antes/después) y lista de IDs de ApiKeys/usuarios QA usados (NO plaintext ni contraseñas)"
+
+  # ─── 4. Criterios de rollback ───────────────────────────────────────
+  - type: markdown
+    attributes:
+      value: |
+        ## 🛑 Criterios de rollback / NO promover a producción
+        Marca cada criterio que **SÍ se cumplió** (todo OK). Si CUALQUIERA queda sin marcar, **NO se promueve a `:latest`**: abre issue de bug bloqueante referenciando este checklist y revierte el deploy de QA al tag previo (`docker-compose -f docker-compose.qa.yml pull` con tag anterior + `up -d`).
+
+  - type: checkboxes
+    id: rollback
+    attributes:
+      label: ✅ Confirmación de NO-violación
+      options:
+        - label: "NO hay auth bypass: ninguna request sin X-API-Key, con key inválida o sin JWT obtuvo 200 fuera de /admin/"
+        - label: "NO hay leak cross-empresa: ningún usuario vio o modificó datos fuera de sus `empresas_permitidas`"
+        - label: "Gate /auto/ íntegro: ninguna key con `puede_sincronizar=False` logró disparar un sync"
+        - label: "SyncLog no avanza con errores: ninguna corrida con `errores: [...]` no vacío actualizó `SyncLog.fecha`"
+        - label: "Sin 500 inesperados: ningún endpoint devolvió 500 por causa distinta a DATABACK/Odoo/BD caída"
+        - label: "Notificaciones activas: todo error en `/auto/` generó mensaje en el Telegram configurado"
+
+  # ─── 5. Resultado global ────────────────────────────────────────────
+  - type: dropdown
+    id: result
+    attributes:
+      label: 🎯 Resultado global del QA
+      options:
+        - "✅ Aprobado para promover a :latest"
+        - "⚠️ Aprobado con observaciones menores (anotar abajo)"
+        - "❌ Rechazado — requiere correcciones (anotar abajo)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: findings
+    attributes:
+      label: 🔍 Hallazgos / observaciones
+      description: |
+        Para cada criterio que NO pasó, describe: qué probaste, qué esperabas, qué pasó, y pasos para reproducir.
+        Si encuentras bugs grandes, abre issues SEPARADOS (uno por bug) y referéncialos acá.
+      placeholder: |
+        Ejemplo:
+        - [ac-empresa] <USER_A> ve trabajadores de empresa fuera de su scope en /api/dna/trabajadores/ — debería filtrarse. Issue: #42
+        - [ac-sync] tras forzar error de DATABACK, SyncLog.fecha avanzó igual — watermark no protegido
+      render: markdown
+    validations:
+      required: false
+
+  # ─── 6. Aprobaciones ────────────────────────────────────────────────
+  - type: input
+    id: aprob-qa
+    attributes:
+      label: ✍️ Aprobación QA
+      placeholder: "@usuario — YYYY-MM-DD"
+    validations:
+      required: true
+
+  - type: input
+    id: aprob-tl
+    attributes:
+      label: ✍️ Aprobación Tech Lead
+      placeholder: "@usuario — YYYY-MM-DD"
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        *Promover a `:latest` (build-main.yml) solo después de tener ambas aprobaciones y resultado ✅.*
