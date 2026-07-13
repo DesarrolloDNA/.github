@@ -1,0 +1,180 @@
+name: "🧪 QA Review - Genli Pharma Web"
+description: "QA de la tienda Genli Pharma (Next.js 16 + FastAPI + PostgreSQL + Odoo, pago SPEI/transferencia). 40 criterios: auth, catalogo, carrito, checkout, pago SPEI, cotizacion Odoo, chatter, seguimiento, admin, bot y correos. Especifico de este repo, NO usar en otros."
+title: "[QA][genli-pharma] <feature/sprint que estas probando>"
+labels:
+  - qa
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Contexto de esta sesion de QA
+        Llena estos campos antes de empezar (si algo no aplica, escribe N/A) y reproduce cada flujo en la web, en orden.
+        Usa datos y cuentas de PRUEBA; Odoo en DESARROLLO. Nada va a produccion sin pasar por el VPS de pruebas.
+        NO incluyas datos personales reales de clientes (nombres completos, correos, telefonos, RFC, CURP, direcciones, CLABE o datos bancarios) en este reporte: usa datos de prueba o marcadores como [CLIENTE], [CORREO].
+        Stack: Next 16 (3100) hacia FastAPI (8010) hacia Postgres + Odoo. Sesion por cookie httpOnly (JWT). Pago unico: transferencia SPEI con doble gate (validador de comprobante y confirmador de cotizacion). Estatus del pedido: pending, review, payment_validated, paid, confirmed, shipped, delivered, cancelled.
+        Regla de envio: $200 MXN si el subtotal < $1,250; gratis si >= $1,250 (sin excepciones).
+  - type: input
+    id: branch
+    attributes:
+      label: Rama probada
+      placeholder: "dev / QA"
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit SHA (primeros 7 chars)
+      placeholder: "a1b2c3d"
+    validations:
+      required: true
+  - type: input
+    id: env-url
+    attributes:
+      label: URL del entorno de pruebas
+      placeholder: "http://localhost:3100 o VPS/LAN"
+    validations:
+      required: false
+  - type: input
+    id: backend-odoo
+    attributes:
+      label: Estado backend / Odoo
+      placeholder: "GET /api/health -> odoo_connected: true"
+    validations:
+      required: false
+  - type: input
+    id: browser
+    attributes:
+      label: Browser / dispositivo + version
+      placeholder: "Chrome 142 (desktop), Safari iOS 18 (movil)"
+    validations:
+      required: false
+  - type: markdown
+    attributes:
+      value: |
+        ## Acceptance criteria - 40 puntos
+        Cada check pasa tal cual esta descrito o se documenta abajo como hallazgo (numero del check, que esperabas, que paso y pasos para reproducir).
+        Los criterios marcados (B) son BLOQUEANTES: si fallan, no hay pase a produccion.
+  - type: checkboxes
+    id: ac-auth
+    attributes:
+      label: "A. Autenticacion y cuenta (5)"
+      options:
+        - label: "1. (B) Registro + verificacion por correo: registrar cuenta nueva con contrasena valida y aceptando Terminos/Privacidad; llega correo de verificacion y al abrir el enlace la cuenta queda verificada y con sesion iniciada"
+        - label: "2. Validacion de contrasena: registrar con contrasena debil (sin mayuscula/numero/simbolo o menos de 8) se rechaza con mensaje claro y NO crea la cuenta"
+        - label: "3. (B) Login y logout: entra con credenciales correctas; el logout limpia la sesion (al recargar no queda logueado)"
+        - label: "4. Login con Google: 'Continuar con Google' autentica y crea/enlaza la cuenta, entra sin pedir contrasena"
+        - label: "5. Recuperacion de contrasena: solicitar codigo, ingresarlo y fijar una nueva; llega codigo de 6 digitos (valido 15 min), permite cambiarla y entrar con la nueva"
+  - type: checkboxes
+    id: ac-catalogo
+    attributes:
+      label: "B. Tienda y catalogo (4)"
+      options:
+        - label: "6. Listado de productos: abrir /tienda carga el catalogo con nombre, precio e imagen; sin productos rotos ni duplicados"
+        - label: "7. Precio y stock desde Odoo: el precio/disponibilidad coincide con Odoo; un producto agotado no permite compra"
+        - label: "8. Detalle de producto: /producto/[slug] muestra info, variantes/presentaciones y boton agregar"
+        - label: "9. Paquetes/kits: abrir un paquete (is_package) y agregarlo funciona; el precio es el del bundle"
+  - type: checkboxes
+    id: ac-carrito
+    attributes:
+      label: "C. Carrito (3)"
+      options:
+        - label: "10. Agregar / quitar / cambiar cantidad refleja los cambios y recalcula el subtotal"
+        - label: "11. Persistencia: agregar productos y recargar la pagina conserva el carrito (localStorage)"
+        - label: "12. Regla de envio (preview): envio = $200 si subtotal < $1,250; gratis si >= $1,250 (sin excepciones)"
+  - type: checkboxes
+    id: ac-checkout
+    attributes:
+      label: "D. Checkout - Direccion de envio (6)"
+      options:
+        - label: "13. Campos vacios al entrar: al abrir el checkout los campos de direccion estan VACIOS (no precarga ninguna guardada)"
+        - label: "14. (B) Buscador de direccion (Google Places/KeyVault): escribir calle y numero en 'Buscar mi direccion' y elegir una sugerencia autocompleta calle, numero, colonia, ciudad, estado y C.P. correctamente"
+        - label: "15. Ciudad limpia: al buscar una direccion de Leon, Gto. la ciudad queda como 'Leon' (sin 'de los Aldama' ni codigos)"
+        - label: "16. Campos solo-lectura + 'Escribir a mano': sin el toggle los campos no se editan a mano; el toggle los desbloquea para captura manual"
+        - label: "17. Direccion guardada llena todo: elegir una direccion guardada llena TODOS los campos (calle, numero, colonia, entre calles, ciudad, estado, C.P., telefono)"
+        - label: "18. Validacion de obligatorios: dar 'Continuar al pago' con un requerido vacio marca el recuadro faltante en ROJO + banner y no avanza; Referencias NO es obligatorio"
+  - type: checkboxes
+    id: ac-pago
+    attributes:
+      label: "E. Pago SPEI y comprobante (5)"
+      options:
+        - label: "19. Pantalla de pago (SPEI): muestra referencia (con copiar), monto y datos bancarios; NO aparece 'No realizamos facturas' ni el campo 'Cuenta'"
+        - label: "20. Dos cuentas (HSBC + Banamex): aparecen ambos bancos con su CLABE y se puede elegir a cual transferir"
+        - label: "21. Texto legible en el hero oscuro: el boton 'Copiar' y los textos del bloque de referencia (fondo oscuro) se leen bien (no invisibles)"
+        - label: "22. (B) Subir comprobante: acepta imagen o PDF (<=8 MB) y muestra 'Comprobante recibido / en revision'; rechaza formatos o tamanos invalidos"
+        - label: "23. Referencia unica por pedido: la referencia es el sufijo del order_number y es unica"
+  - type: checkboxes
+    id: ac-odoo
+    attributes:
+      label: "F. Cotizacion en Odoo al hacer el pedido (6)"
+      options:
+        - label: "24. (B) Cotizacion creada al checkout: al hacer el pedido aparece una cotizacion draft al instante, ANTES de subir el comprobante"
+        - label: "25. Nombre del cliente en MAYUSCULAS en el Customer de la cotizacion (clientes nuevos y los que ya existian)"
+        - label: "26. Direccion distribuida: calle, numero, colonia, entre calles, ciudad, estado y C.P. en SUS campos (no amontonados)"
+        - label: "27. Lineas de la cotizacion: cada producto con su precio; linea de envio solo si aplica ($200); el total cuadra"
+        - label: "28. Sin duplicados: reintentar el mismo pedido no crea cotizaciones duplicadas (anti-dup por referencia)"
+        - label: "29. Sucursal / clasificacion: cotizacion en MENUDEO (branch/unidad/equipo correctos); no falla por sucursal"
+  - type: checkboxes
+    id: ac-chatter
+    attributes:
+      label: "G. Mensajes en el chatter de Odoo - doble gate (3)"
+      options:
+        - label: "30. Nota 'en espera de comprobante' tras crear el pedido (sin comprobante), SIN @mencion, firmada por la vendedora"
+        - label: "31. GATE 1 al subir comprobante: se adjunta el archivo + @mencion al validador (nombre completo) pidiendo validar el deposito"
+        - label: "32. GATE 2 al validar: marcar 'Comprobante validado' en Odoo genera (tras el polling) una nota con @mencion al confirmador (nombre completo) pidiendo confirmar la cotizacion"
+  - type: checkboxes
+    id: ac-seguimiento
+    attributes:
+      label: "H. Seguimiento del pedido - perfil del cliente (3)"
+      options:
+        - label: "33. Timeline: en /cuenta/pedidos, 'Ver seguimiento' muestra los 5 hitos (Pedido recibido, Comprobante recibido, Pago confirmado, En preparacion, Enviado) + barra de progreso"
+        - label: "34. Hito 'Comprobante recibido' se marca completado al subir el comprobante aunque el pago aun no se valide"
+        - label: "35. Guias de rastreo: en un pedido enviado muestra paqueteria + numero + boton 'Ver guia' (una o multiples)"
+  - type: checkboxes
+    id: ac-admin
+    attributes:
+      label: "I. Panel de administracion (3)"
+      options:
+        - label: "36. Acceso admin + redireccion: el admin entra al panel; al abrir /cuenta un admin es redirigido al panel (no al perfil de cliente)"
+        - label: "37. Pedidos (admin): en /admin/pedidos buscar, cambiar estatus y 'Reenviar/Actualizar Odoo' funcionan"
+        - label: "38. Catalogo CRUD con proteccion: crear/editar un producto en /admin/productos lo guarda y lo deja protegido (badge 'Manual'); el sync de Odoo NO lo sobreescribe"
+  - type: checkboxes
+    id: ac-bot-correos
+    attributes:
+      label: "J. Bot, correos y general (2)"
+      options:
+        - label: "39. Bot (chat) info de pago correcta: al preguntar como pagar / si hay factura responde transferencia SPEI (no tarjeta), texto sin ** de markdown, ofrece asesor WhatsApp y no inventa productos"
+        - label: "40. Correos transaccionales: instrucciones de pago, pago confirmado, envio y cancelacion 72 h llegan con la info correcta (referencia, ambas cuentas bancarias, guia, motivo de cancelacion)"
+  - type: dropdown
+    id: result
+    attributes:
+      label: "Resultado global del QA"
+      options:
+        - "Aprobado para produccion"
+        - "Aprobado con observaciones menores (anotar abajo)"
+        - "Rechazado, requiere correcciones (anotar abajo)"
+    validations:
+      required: true
+  - type: textarea
+    id: findings
+    attributes:
+      label: "Hallazgos / observaciones"
+      description: "Para cada criterio que NO paso: numero del check, dispositivo, que esperabas, que paso y pasos para reproducir. Adjunta captura o URL. NO incluyas datos personales reales ni datos bancarios. Si hay bugs grandes, abre issues separados y referencialos."
+      placeholder: "- [#14 checkout] El buscador de direccion no autocompleta la colonia al elegir una sugerencia en movil."
+      render: markdown
+    validations:
+      required: false
+  - type: textarea
+    id: blockers
+    attributes:
+      label: "Bloqueantes fallidos (B)"
+      description: "Lista solo los criterios BLOQUEANTES que fallaron (1, 3, 14, 22, 24). Si no fallo ninguno, escribe 'ninguno'."
+      placeholder: "ninguno"
+    validations:
+      required: false
+  - type: input
+    id: time-spent
+    attributes:
+      label: "Tiempo aproximado del QA"
+      placeholder: "3h"
+    validations:
+      required: false
